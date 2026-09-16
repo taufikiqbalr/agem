@@ -18,8 +18,8 @@ import (
 )
 
 // @title AGEM Backend API
-// @version 1.0
-// @description Backend API for AGEM wearable users, devices, qring sensor data, sleep, and workouts.
+// @version 3.0
+// @description Backend API for AGEM/QRing wearable users, devices, pairing, multi-day sensor synchronization, sleep sessions, activity, events, raw samples, and workouts.
 // @BasePath /
 func main() {
 	cfg := config.Load()
@@ -65,8 +65,11 @@ func main() {
 	if err := st.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("db indexes: %v", err)
 	}
-	handler := router.Router(st)
+	if err := st.EnsureSDKV3Schema(ctx); err != nil {
+		log.Fatalf("db v3 schema: %v", err)
+	}
 
+	handler := router.Router(st)
 	srv := &http.Server{
 		Addr:         cfg.Addr,
 		Handler:      handler,
