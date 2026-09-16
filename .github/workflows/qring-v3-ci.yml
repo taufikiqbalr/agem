@@ -14,7 +14,7 @@ permissions:
 jobs:
   go-review:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,3 +46,143 @@ jobs:
 
       - name: Build API
         run: go build ./cmd/api
+
+      - name: Start MongoDB 7
+        shell: bash
+        run: |
+          docker run -d --name agem-ci-mongo -p 27017:27017 mongo:7.0 --bind_ip_all
+          for i in $(seq 1 30); do
+            if docker exec agem-ci-mongo mongosh --quiet --eval 'db.adminCommand({ping:1}).ok' | grep -q 1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs agem-ci-mongo
+          exit 1
+
+      - name: Start AGEM API
+        shell: bash
+        env:
+          ADDR: :18080
+          MONGODB_URI: mongodb://127.0.0.1:27017/regene_kalaagem
+        run: |
+          nohup go run ./cmd/api >/tmp/agem-api.log 2>&1 &
+          echo $! >/tmp/agem-api.pid
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:18080/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/agem-api.log
+          exit 1
+
+      - name: Exercise v3 sync and range readback
+        shell: bash
+        run: |
+          response="$(curl -fsS -X POST http://127.0.0.1:18080/v3/wearable/sync \
+            -H 'Content-Type: application/json' \
+            --data-binary @- <<'JSON'
+          {
+            "deviceUid": "ci-qring-001",
+            "tzOffsetMin": 420,
+            "device": {
+              "vendor": "QRing",
+              "model": "G69",
+              "sdkVersion": "2025-08-26",
+              "capabilities": {"heartRate": true, "spo2": true, "temperature": true}
+            },
+            "deviceState": {
+              "batteryPercent": 80,
+              "charging": false,
+              "lastSeenAt": "2026-09-16T08:00:00Z"
+            },
+            "days": [{
+              "date": "2026-09-16",
+              "activity": {
+                "totalSteps": 1000,
+                "runningSteps": 100,
+                "caloriesRaw": 25000,
+                "caloriesKcal": 25.0,
+                "distanceM": 700,
+                "sportDurationS": 900,
+                "sleepDurationS": 25200
+              },
+              "activityBuckets": [{
+                "timeIndex": 32,
+                "walkSteps": 120,
+                "runSteps": 10,
+                "caloriesRaw": 800,
+                "distanceM": 90
+              }],
+              "measurements": [{
+                "ts": "2026-09-16T08:00:00Z",
+                "metric": "heart_rate",
+                "value": 72,
+                "unit": "bpm",
+                "measurementMode": "history_sync"
+              }],
+              "sleepSessions": [{
+                "type": "main",
+                "protocol": "new_sleep_protocol",
+                "start": "2026-09-15T16:00:00Z",
+                "segments": [
+                  {"durationS": 3600, "stageCode": 3},
+                  {"durationS": 3600, "stageCode": 2}
+                ]
+              }],
+              "targets": [{"kind": "steps", "value": 1000, "target": 4000, "unit": "steps"}],
+              "events": [{
+                "ts": "2026-09-16T08:00:00Z",
+                "eventType": "sedentary",
+                "payload": {"state": 1}
+              }],
+              "rawSamples": [{
+                "ts": "2026-09-16T08:00:00Z",
+                "sessionId": "ci-raw",
+                "sampleIndex": 0,
+                "kind": "ppg",
+                "channels": {"green": 123}
+              }]
+            }]
+          }
+          JSON
+          )"
+          printf '%s' "$response" | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x["status"]=="synced"; assert x["device"]["deviceUid"]=="ci-qring-001"; assert x["upserted"]["dailyActivity"]==1; assert x["upserted"]["sleepSessions"]==1'
+
+          range_response="$(curl -fsS 'http://127.0.0.1:18080/v3/wearable/range?device_uid=ci-qring-001&from=2026-09-16&to=2026-09-16&include_raw=true')"
+          printf '%s' "$range_response" | python3 -c 'import json,sys; x=json.load(sys.stdin); assert len(x["days"])==1; d=x["days"][0]; assert d["date"]=="2026-09-16"; assert d["activity"]["totalSteps"]==1000; assert len(d["measurements"])>=1; assert len(d["sleepSessions"])==1; assert len(d["rawSamples"])==1'
+
+      - name: Exercise v3 pairing and unpair flow
+        shell: bash
+        run: |
+          user_response="$(curl -fsS -X POST http://127.0.0.1:18080/v1/users/ \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"qring-ci@example.com","phone":"+62000000000"}')"
+          user_id="$(printf '%s' "$user_response" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+
+          pair_response="$(curl -fsS -X POST "http://127.0.0.1:18080/v3/users/$user_id/devices" \
+            -H 'Content-Type: application/json' \
+            -d '{"deviceUid":"ci-qring-001","nickname":"CI Ring","isPrimary":true}')"
+          printf '%s' "$pair_response" | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x["deviceUid"]=="ci-qring-001"; assert x["isPrimary"] is True'
+
+          list_response="$(curl -fsS "http://127.0.0.1:18080/v3/users/$user_id/devices")"
+          printf '%s' "$list_response" | python3 -c 'import json,sys; x=json.load(sys.stdin); assert len(x)==1; assert x[0]["deviceUid"]=="ci-qring-001"'
+
+          unpair_response="$(curl -fsS -X DELETE "http://127.0.0.1:18080/v3/users/$user_id/devices/ci-qring-001")"
+          printf '%s' "$unpair_response" | python3 -c 'import json,sys; assert json.load(sys.stdin)["status"]=="unpaired"'
+
+          empty_response="$(curl -fsS "http://127.0.0.1:18080/v3/users/$user_id/devices")"
+          printf '%s' "$empty_response" | python3 -c 'import json,sys; assert json.load(sys.stdin)==[]'
+
+          # An unpaired device must be available for a new active pairing.
+          curl -fsS -X POST "http://127.0.0.1:18080/v3/users/$user_id/devices" \
+            -H 'Content-Type: application/json' \
+            -d '{"deviceUid":"ci-qring-001","nickname":"CI Ring Again","isPrimary":true}' >/dev/null
+
+      - name: API and Mongo logs on failure
+        if: failure()
+        shell: bash
+        run: |
+          cat /tmp/agem-api.log || true
+          docker logs agem-ci-mongo || true
