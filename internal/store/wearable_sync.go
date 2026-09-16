@@ -154,7 +154,7 @@ func (s *Store) SyncWearable(ctx context.Context, req WearableSyncRequest) (*Wea
 			if err := s.upsertV3Workout(ctx, device.ID.Hex(), day.Date, tzOffsetMin, workout); err != nil {
 				return nil, fmt.Errorf("day %s workouts[%d]: %w", day.Date, i, err)
 			}
-t		result.Upserted.Workouts++
+			result.Upserted.Workouts++
 		}
 
 		for i, event := range day.Events {
