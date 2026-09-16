@@ -38,6 +38,7 @@ type userDeviceDoc struct {
 	DeviceID   string             `bson:"device_id"`
 	Nickname   *string            `bson:"nickname,omitempty"`
 	IsPrimary  bool               `bson:"is_primary"`
+	Active     bool               `bson:"active"`
 	PairedAt   time.Time          `bson:"paired_at"`
 	UnpairedAt *time.Time         `bson:"unpaired_at,omitempty"`
 }
@@ -50,13 +51,18 @@ func (s *Store) PairDeviceToUser(ctx context.Context, p PairDeviceParams) (*User
 	if !exists {
 		return nil, ErrNotFound
 	}
+	// Do not create orphan pairing rows. v1 keeps using the internal device ID,
+	// while canonical v3 pairing accepts device_uid and resolves it first.
+	if _, err := s.GetDevice(ctx, p.DeviceID); err != nil {
+		return nil, err
+	}
 
 	cctx, cancel := ctxTimeout(ctx)
 	defer cancel()
 
 	col := s.db.Collection("user_devices")
 	if p.IsPrimary {
-		if _, err := col.UpdateMany(cctx, bson.M{"user_id": p.UserID}, bson.M{"$set": bson.M{"is_primary": false}}); err != nil {
+		if _, err := col.UpdateMany(cctx, bson.M{"user_id": p.UserID, "active": true}, bson.M{"$set": bson.M{"is_primary": false}}); err != nil {
 			return nil, err
 		}
 	}
@@ -67,6 +73,7 @@ func (s *Store) PairDeviceToUser(ctx context.Context, p PairDeviceParams) (*User
 		DeviceID:  p.DeviceID,
 		Nickname:  optionalString(p.Nickname),
 		IsPrimary: p.IsPrimary,
+		Active:    true,
 		PairedAt:  time.Now().UTC(),
 	}
 	if _, err := col.InsertOne(cctx, doc); err != nil {
@@ -129,7 +136,7 @@ func (s *Store) UpdateUserDevice(ctx context.Context, id string, p UpdateUserDev
 			}
 			return nil, err
 		}
-		if _, err := col.UpdateMany(cctx, bson.M{"user_id": existing.UserID}, bson.M{"$set": bson.M{"is_primary": false}}); err != nil {
+		if _, err := col.UpdateMany(cctx, bson.M{"user_id": existing.UserID, "active": true}, bson.M{"$set": bson.M{"is_primary": false}}); err != nil {
 			return nil, err
 		}
 	}
@@ -146,7 +153,9 @@ func (s *Store) UpdateUserDevice(ctx context.Context, id string, p UpdateUserDev
 		if err != nil {
 			return nil, err
 		}
-		set["unpaired_at"] = unpaired
+		set["unpaired_at"] = unpaired.UTC()
+		set["active"] = false
+		set["is_primary"] = false
 	}
 	var doc userDeviceDoc
 	if len(set) == 0 {

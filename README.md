@@ -1,650 +1,975 @@
-# agem API
+# AGEM Backend — QRing SDK v3
 
-Backend API for AGEM wearable device data. 
+Go backend for AGEM/QRing wearable devices. The canonical frontend API is **v3**. v3 is aligned with the QRing Android SDK used by the mobile frontend and is designed to preserve the semantics of historical SDK synchronization instead of flattening everything into one daily snapshot.
 
-This README focuses on API usage. The service stores data in MongoDB and keeps
-public IDs as strings. Mongo `_id` values are returned as hex string `id`
-fields.
+The service stores wearable data in MongoDB (`regene_kalaagem` by default). User identity can come from the Regene `users` collection while AGEM owns devices, pairings, measurements, activity, sleep, workouts, events, raw samples, and sync metadata.
 
-Canonical user identity can come from Regene `users`. When `NASABAH_REGENE` or
-`REGENE_MONGODB_URI` is configured, AGEM reads users from the Regene database
-and keeps wearable devices, pairings, and measurements in `db-kala-agem`.
-The local AGEM `users` collection remains as a fallback for local development
-and older records.
+## Why v3 was redesigned
 
-Additional API artifacts:
+The QRing SDK exposes multiple independent synchronization paths:
 
-| File | Purposes |
-| --- | --- |
-| [`docs/API.md`](docs/API.md) | Human-readable route reference. |
-| [`docs/openapi.yaml`](docs/openapi.yaml) | OpenAPI 3.0.3 specification for Swagger UI, Postman, Insomnia, or client generation. |
+- daily activity totals (`BleStepTotal` / `TodaySportDataRsp`)
+- 15-minute activity details (`BleStepDetails`)
+- historical heart rate arrays
+- historical SpO2 min/max values
+- blood pressure
+- stress / pressure
+- HRV
+- continuous and manual temperature
+- legacy and new sleep protocols, including lunch/nap sleep
+- sedentary state
+- workouts / sport records
+- battery and charging state
+- manual and one-click measurements
+- optional raw PPG / accelerometer-related values
 
-## Quick Start
+Several SDK calls synchronize historical data using day offsets. Therefore v3 requires **explicit device-local dates** and supports **multiple days per request**. The backend no longer derives one `sync_date` from the latest timestamp in the request.
 
-Run locally with a MongoDB URI:
+## Stack
 
-```sh
+- Go 1.24+
+- `github.com/go-chi/chi/v5`
+- MongoDB Go driver
+- MongoDB regular + time-series collections
+
+## Run locally
+
+```bash
 ADDR=:8080 \
 MONGODB_URI='mongodb://user:password@localhost:27017/regene_kalaagem?authSource=admin' \
 go run ./cmd/api
 ```
 
-Set a reusable base URL for examples:
-
-```sh
-BASE=http://localhost:8080
-```
-
 Health check:
 
-```sh
-curl "$BASE/healthz"
+```bash
+curl http://localhost:8080/healthz
 ```
-
-Response:
 
 ```json
 {"status":"ok"}
 ```
 
-## API Conventions
+## Canonical architecture
 
-- All request and response bodies are JSON.
-- Unknown JSON fields are rejected on `/v1`; `/v3/wearable/sync` ignores
-  unknown future fields and stores recognized sections.
-- Timestamps use RFC3339, for example `2026-05-19T08:00:00Z`.
-- Device-local dates use `YYYY-MM-DD`.
-- Error responses use `{"error":"message"}`.
-- Empty delete responses use `{"status":"deleted"}`.
-
-## Typical Usage Flow
-
-1. Create a user.
-2. Create a wearable device.
-3. Pair the device to the user.
-4. Ingest wearable data for the device.
-5. Read back activity, sensor metrics, sleep, events, and workouts by date or time range.
-
-## Wearable v3 Sync
-
-Use this endpoint for the QRing/frontend daily sync payload. It stores the
-recognized nested payload in `wearable_syncs`, fans summary sensor sections and
-timestamped readings into `health_metrics`, writes daily totals into
-`daily_activity`, maps `activity.readings` into `steps_15m` including
-`activeTime` as `sport_duration_s`, writes sleep totals into `sleep_summary`,
-maps `sleep.segments` into `sleep_segments`, and stores target progress rows in
-`total_activities`.
-
-| Method | Route | Description |
-| --- | --- | --- |
-| `POST` | `/v3/wearable/sync` | Sync one QRing-style daily wearable snapshot. |
-| `GET` | `/v3/wearable/range?device_uid=...&from=YYYY-MM-DD&to=YYYY-MM-DD` | List synced snapshots by inclusive date range. |
-| `GET` | `/v3/users/{user_id}/wearable/range?from=YYYY-MM-DD&to=YYYY-MM-DD` | List synced snapshots grouped by the user's paired devices. |
-
-`deviceUid` is required in the JSON body. The backend also accepts
-`device_uid` as an alias. If the device UID does not exist yet, the backend
-creates a minimal device with `vendor: "QRing"`.
-Use ISO/RFC3339 timestamps, including millisecond precision when available.
-`tzOffsetMin` is optional and defaults to `0`; it is used for deriving
-`device_date` and 15-minute `time_index` from `activity.readings`.
-
-```sh
-curl -s -X POST "$BASE/v3/wearable/sync" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "deviceUid": "qring-aa-bb-cc-01",
-    "tzOffsetMin": 420,
-    "hrv": {"current": 42, "average": 45, "readingsCount": 2, "lastUpdated": "2026-07-27T23:44:10.512Z", "readings": [{"ts": "2026-07-27T23:43:10.123Z", "value": 41}, {"ts": "2026-07-27T23:44:10.512Z", "value": 42}]},
-    "heartRate": {"current": 77, "average": 74, "min": 58, "max": 112, "readingsCount": 2, "lastUpdated": "2026-07-27T23:44:10.512Z", "readings": [{"ts": "2026-07-27T23:43:10.123Z", "value": 76}, {"ts": "2026-07-27T23:44:10.512Z", "value": 77}]},
-    "spo2": {"current": 97, "average": 96, "readingsCount": 1, "lastUpdated": "2026-07-27T23:44:10.512Z", "readings": [{"ts": "2026-07-27T23:44:10.512Z", "value": 97}]},
-    "temperature": {"current": 36.7, "average": 36.5, "raw": 36.72, "readingsCount": 1, "lastUpdated": "2026-07-27T23:44:10.512Z", "readings": [{"ts": "2026-07-27T23:44:10.512Z", "value": 36.7, "raw": 36.72}]},
-    "stress": {"current": 30, "average": 34, "readingsCount": 1, "lastUpdated": "2026-07-27T23:44:10.512Z", "readings": [{"ts": "2026-07-27T23:44:10.512Z", "value": 30}]},
-    "activity": {"steps": 717, "calories": 28390, "distance": 493, "activeTime": 29, "lastUpdated": "2026-07-27T23:44:10.512Z", "readings": [{"ts": "2026-07-27T08:00:00.000Z", "steps": 120, "calories": 8, "distance": 95, "activeTime": 15}]},
-    "sleep": {"totalMinutes": 431, "deepMinutes": 92, "lightMinutes": 268, "remMinutes": 61, "awakeMinutes": 10, "score": 78, "sleepStart": "2026-07-26T22:41:00.000Z", "sleepEnd": "2026-07-27T05:52:00.000Z", "lastUpdated": "2026-07-27T23:44:10.512Z", "stageData": [2, 2, 3, 3, 1, 1, 1, 2, 4], "segments": [{"start": "2026-07-26T22:41:00.000Z", "end": "2026-07-26T23:11:00.000Z", "stage": "light"}]},
-    "bloodPressure": {"systolic": 118, "diastolic": 76, "heartRate": 72, "measurementTime": "2026-07-27T07:12:00.000Z", "lastUpdated": "2026-07-27T23:44:10.512Z", "readings": [{"ts": "2026-07-27T07:12:00.000Z", "systolic": 118, "diastolic": 76, "heartRate": 72}]},
-    "totalActivities": [
-      {"kind": "steps", "value": 717, "target": 4000},
-      {"kind": "calories", "value": 28.39, "target": 500},
-      {"kind": "distance", "value": 0.493, "target": 4}
-    ]
-  }'
+```text
+QRing / G69
+    │ Bluetooth LE
+    ▼
+Android frontend + QRing SDK
+    │
+    │ POST /v3/wearable/sync
+    ▼
+AGEM Go API
+    │
+    ├── devices                 current device metadata/state/capabilities
+    ├── user_devices            user ↔ device pairing history
+    ├── daily_activity          device-local daily activity totals
+    ├── steps_15m               15-minute activity buckets (time series)
+    ├── health_metrics          normalized measurements (time series)
+    ├── sleep_sessions          main sleep + nap/lunch sleep
+    ├── sleep_segments          sleep stage timeline (time series)
+    ├── sleep_summary           daily aggregate derived from sessions
+    ├── workouts                training/sport sessions
+    ├── device_events           sedentary/charging/device events (time series)
+    ├── raw_sensor_samples      optional short-retention raw sensor samples
+    ├── total_activities        daily target/progress values
+    └── wearable_syncs          per-day sync metadata/coverage
 ```
 
-Response:
+`wearable_syncs` is **not the authoritative sensor store**. v3 range responses are assembled from the normalized collections above. This prevents partial sync requests from overwriting previously synchronized domains.
+
+---
+
+# v3 endpoints
+
+## Device / pairing
+
+| Method | Route | Purpose |
+|---|---|---|
+| `GET` | `/v3/devices/by_uid/{device_uid}` | Get registered device metadata/state. |
+| `POST` | `/v3/users/{user_id}/devices` | Pair a registered device to a user by stable device UID. |
+| `GET` | `/v3/users/{user_id}/devices` | List active device pairings. |
+| `PATCH` | `/v3/users/{user_id}/devices/{device_uid}` | Update pairing nickname / primary flag. |
+| `DELETE` | `/v3/users/{user_id}/devices/{device_uid}` | Soft-unpair; history is preserved. |
+
+## Wearable synchronization / readback
+
+| Method | Route | Purpose |
+|---|---|---|
+| `POST` | `/v3/wearable/sync` | Canonical QRing SDK ingest endpoint. |
+| `GET` | `/v3/wearable/range?device_uid=...&from=YYYY-MM-DD&to=YYYY-MM-DD` | Read normalized data by device UID. |
+| `GET` | `/v3/devices/{device_id}/wearable/range?from=...&to=...` | Read normalized data by Mongo device ID. |
+| `GET` | `/v3/users/{user_id}/wearable/range?from=...&to=...` | Read all active devices for a user. |
+
+Add `include_raw=true` only when diagnostic raw sensor samples are required. Raw samples are intentionally excluded by default.
+
+The older `/v1` collection-oriented endpoints remain in the router for legacy clients, but new QRing frontend work should use v3.
+
+---
+
+# Device registration model
+
+A dedicated registration call is not required. The first successful `/v3/wearable/sync` upserts the device by stable `deviceUid`.
+
+Recommended first sync:
 
 ```json
 {
-  "status": "synced",
-  "device_id": "66a000000000000000000001",
-  "device_uid": "qring-aa-bb-cc-01",
-  "sync_date": "2026-07-27",
-  "upserted": {
-    "snapshot": 1,
-    "health_metrics": 14,
-    "daily_activity": 1,
-    "steps_15m": 1,
-    "sleep_summary": 1,
-    "sleep_segments": 1,
-    "total_activities": 3
+  "deviceUid": "AA:BB:CC:DD:EE:FF",
+  "tzOffsetMin": 420,
+  "device": {
+    "vendor": "QRing",
+    "model": "G69",
+    "hwRev": "1.0",
+    "fwRev": "1.2.3",
+    "serialNumber": "G69-001",
+    "sdkVersion": "2025-08-26",
+    "capabilities": {
+      "heartRate": true,
+      "spo2": true,
+      "temperature": true,
+      "hrv": true,
+      "newSleepProtocol": true,
+      "oneClickMeasurement": true,
+      "bloodPressure": false
+    }
+  },
+  "deviceState": {
+    "batteryPercent": 82,
+    "charging": false,
+    "lastSeenAt": "2026-09-16T08:30:00Z"
   }
 }
 ```
 
-Read back snapshots:
+### Device capabilities
 
-```sh
-curl -s "$BASE/v3/wearable/range?device_uid=qring-aa-bb-cc-01&from=2026-07-01&to=2026-07-27"
-```
+The SDK exposes capability flags through `SetTimeRsp` and `DeviceSupportFunctionRsp`. Store capability values reported by the actual device rather than assuming all devices using the SDK support all functions.
 
-Read back snapshots for every device paired to a user:
+For example, a G69 product profile can report HR, SpO2, temperature, HRV, all-day sleep, sedentary reminder, and sport features while another QRing model may expose blood pressure or other capabilities.
 
-```sh
-curl -s "$BASE/v3/users/66a000000000000000000100/wearable/range?from=2026-07-01&to=2026-07-27"
-```
+`capabilities` is an open boolean map so new SDK feature flags can be added without a database migration.
 
-Add `include_readings=true` to return the raw `readings` and `segments` arrays
-inside each daily snapshot. This works for both range endpoints:
+### Current device state
 
-```sh
-curl -s "$BASE/v3/wearable/range?device_uid=qring-aa-bb-cc-01&from=2026-07-01&to=2026-07-27&include_readings=true"
-```
+`deviceState` updates the current `devices` document:
 
-## Users
+- `battery_percent`
+- `charging`
+- `last_seen_at`
+- `state_updated_at`
 
-| Method | Route | Description |
-| --- | --- | --- |
-| `POST` | `/v1/users/` | Create user. |
-| `GET` | `/v1/users/{id}` | Get user by ID from Regene when configured, otherwise local AGEM users. |
-| `PATCH` | `/v1/users/{id}` | Update local AGEM fallback user. |
-| `DELETE` | `/v1/users/{id}` | Delete local AGEM fallback user. |
+Battery is also persisted as a `health_metrics` point (`metric=battery_level`). Charging state is also persisted as a `device_events` point (`event_type=charging_state`) so current state and history are both available.
 
-Create local fallback user:
+---
 
-```sh
-curl -s -X POST "$BASE/v1/users/" \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"patient@example.com","phone":"+628123456789"}'
-```
+# Pairing
 
-Response:
+Pairing uses the stable `deviceUid`; the frontend does not need to know the internal MongoDB device ID.
 
-```json
-{
-  "id": "665d6f4a7f4a6d0e8f3c0001",
-  "email": "patient@example.com",
-  "phone": "+628123456789",
-  "created_at": "2026-05-19T08:00:00Z",
-  "updated_at": "2026-05-19T08:00:00Z"
-}
-```
-
-Update user:
-
-```sh
-curl -s -X PATCH "$BASE/v1/users/$USER_ID" \
-  -H 'Content-Type: application/json' \
-  -d '{"phone":"+628987654321"}'
-```
-
-## Devices
-
-| Method | Route | Description |
-| --- | --- | --- |
-| `POST` | `/v1/devices/` | Create device. |
-| `GET` | `/v1/devices/{id}` | Get device by ID. |
-| `GET` | `/v1/devices/by_uid/{device_uid}` | Get device by stable device UID. |
-| `PATCH` | `/v1/devices/{id}` | Update device metadata. |
-| `DELETE` | `/v1/devices/{id}` | Delete device. |
-
-Create device:
-
-```sh
-curl -s -X POST "$BASE/v1/devices/" \
+```bash
+curl -X POST "$BASE/v3/users/$USER_ID/devices" \
   -H 'Content-Type: application/json' \
   -d '{
-    "vendor": "agem",
-    "model": "agem-band",
-    "hw_rev": "1.0",
-    "fw_rev": "1.0.0",
-    "serial_number": "SN-AGEM-001",
-    "device_uid": "AGEM-MAC-001"
+    "deviceUid": "AA:BB:CC:DD:EE:FF",
+    "nickname": "My G69",
+    "isPrimary": true
   }'
 ```
 
-Required fields:
+Rules enforced by database indexes and the v3 store:
 
-| Field | Notes |
-| --- | --- |
-| `vendor` | Required. |
-| `device_uid` | Required and unique. Use the stable wearable identifier, such as remote ID or MAC address. |
-
-Update device:
-
-```sh
-curl -s -X PATCH "$BASE/v1/devices/$DEVICE_ID" \
-  -H 'Content-Type: application/json' \
-  -d '{"fw_rev":"1.0.1","last_seen_at":"2026-05-19T08:15:00Z"}'
-```
-
-## User Device Pairing
-
-| Method | Route | Description |
-| --- | --- | --- |
-| `POST` | `/v1/users/{user_id}/devices` | Pair a device to a user. |
-| `GET` | `/v1/users/{user_id}/devices` | List paired devices for a user. |
-| `PATCH` | `/v1/user_devices/{id}` | Update pairing metadata. |
-| `DELETE` | `/v1/user_devices/{id}` | Delete pairing record. |
-
-`user_id` must exist in Regene `users` when `NASABAH_REGENE` is configured.
-For test, `62d10918cf0e3f8821001f7d` is the `tester@regene.id` user.
-
-Pair device to user:
-
-```sh
-curl -s -X POST "$BASE/v1/users/$USER_ID/devices" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "device_id": "'$DEVICE_ID'",
-    "nickname": "daily band",
-    "is_primary": true
-  }'
-```
+1. A user cannot have duplicate active pairings to the same device.
+2. A physical device can have only one active owner at a time.
+3. A user can have only one active primary wearable.
+4. Unpairing is soft: `unpaired_at` is set and the historical pairing record is retained.
+5. `user_id` must resolve in the configured Regene `users` collection, with local AGEM `users` as fallback when applicable.
 
 Update pairing:
 
-```sh
-curl -s -X PATCH "$BASE/v1/user_devices/$PAIRING_ID" \
+```bash
+curl -X PATCH "$BASE/v3/users/$USER_ID/devices/AA:BB:CC:DD:EE:FF" \
   -H 'Content-Type: application/json' \
-  -d '{"nickname":"left wrist","is_primary":true}'
+  -d '{"nickname":"Left wrist","isPrimary":true}'
 ```
 
-Unpair without deleting the record:
+Unpair:
 
-```sh
-curl -s -X PATCH "$BASE/v1/user_devices/$PAIRING_ID" \
-  -H 'Content-Type: application/json' \
-  -d '{"unpaired_at":"2026-05-19T09:00:00Z"}'
+```bash
+curl -X DELETE "$BASE/v3/users/$USER_ID/devices/AA:BB:CC:DD:EE:FF"
 ```
 
-## Steps
+---
 
-| Method | Route | Description |
-| --- | --- | --- |
-| `POST` | `/v1/devices/{device_id}/steps15m` | Idempotent ingest for 15-minute step points. |
-| `GET` | `/v1/devices/{device_id}/steps15m?date=YYYY-MM-DD` | List 15-minute points for one device-local date. |
-| `GET` | `/v1/devices/{device_id}/steps/daily?from=RFC3339&to=RFC3339` | Aggregate daily step totals from the `steps_15m` time series collection. |
+# `/v3/wearable/sync`
 
-Ingest 15-minute points:
+## Request-level fields
 
-```sh
-curl -s -X POST "$BASE/v1/devices/$DEVICE_ID/steps15m" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "points": [
-      {
-        "ts_utc": "2026-05-19T00:00:00Z",
-        "device_date": "2026-05-19",
-        "time_index": 0,
-        "tz_offset_min": 420,
-        "walk_steps": 120,
-        "run_steps": 0,
-        "calories": 4,
-        "distance_m": 80,
-        "sport_duration_s": 600,
-        "source": "device"
-      }
-    ]
-  }'
-```
+| Field | Type | Required | Description |
+|---|---|---:|---|
+| `deviceUid` | string | yes | Stable QRing identifier (typically the stable BLE/device identifier chosen by the frontend). |
+| `device_uid` | string | alias | Compatibility alias for `deviceUid`. |
+| `tzOffsetMin` | integer | yes | Device-local UTC offset in minutes, e.g. Jakarta `420`. Range `-840..840`. |
+| `device` | object | no | Device metadata and capabilities. |
+| `deviceState` | object | no | Current battery/charging/last-seen state. |
+| `days` | array | no | Explicit device-local days containing synchronized SDK data. |
 
-Response:
+At least one of `device`, `deviceState`, or `days` must contain data.
 
-```json
-{"upserted":1}
-```
+Request bodies are limited to **8 MiB**. Raw samples should be batched instead of sending an unbounded diagnostic stream.
 
-`upserted` is the number of new measurements inserted into the time series
-collection. Duplicate points with the same `device_id + ts_utc` are skipped by
-the backend key collection.
+Unknown JSON fields are rejected. This is intentional: SDK mapping mistakes should fail visibly rather than silently losing wearable data.
 
-List points by date:
+## Multi-day rule
 
-```sh
-curl -s "$BASE/v1/devices/$DEVICE_ID/steps15m?date=2026-05-19"
-```
-
-Get daily totals:
-
-```sh
-curl -s "$BASE/v1/devices/$DEVICE_ID/steps/daily?from=2026-05-19T00:00:00Z&to=2026-05-20T00:00:00Z"
-```
-
-Daily total response fields:
-
-| Field | Description |
-| --- | --- |
-| `day_utc` | UTC day bucket. |
-| `total_steps` | `walk_steps + run_steps`. |
-| `running_steps` | Sum of `run_steps`. |
-| `calories` | Sum of calories. |
-| `distance_m` | Sum of distance. |
-| `last_synced_at` | Latest sync time in the bucket. |
-
-## Daily Activity
-
-Use this for the qring SDK daily total object (`BleStepTotal` /
-`TodaySportDataRsp`), including fields that are not present in 15-minute step
-details.
-
-| Method | Route | Description |
-| --- | --- | --- |
-| `POST` | `/v1/devices/{device_id}/activity/daily` | Upsert one device-local daily activity total. |
-| `GET` | `/v1/devices/{device_id}/activity/daily?from=YYYY-MM-DD&to=YYYY-MM-DD` | List daily totals by device-local date range. |
-
-```sh
-curl -s -X POST "$BASE/v1/devices/$DEVICE_ID/activity/daily" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "device_date": "2026-05-19",
-    "tz_offset_min": 420,
-    "total_steps": 6200,
-    "running_steps": 900,
-    "calories": 240,
-    "walk_distance_m": 4300,
-    "sport_duration_s": 1800,
-    "sleep_duration_s": 27000,
-    "source": "device"
-  }'
-```
-
-## Health Metrics
-
-Use this generic time-series route for qring sensor data that is not already
-modeled by steps, sleep, or workouts: heart rate, SpO2, blood pressure, HRV,
-stress/pressure, temperature, RRI, raw PPG samples, and similar measurements.
-
-| Method | Route | Description |
-| --- | --- | --- |
-| `POST` | `/v1/devices/{device_id}/health/metrics` | Idempotent ingest for health sensor points. |
-| `GET` | `/v1/devices/{device_id}/health/metrics?from=RFC3339&to=RFC3339&metric=heart_rate` | List health sensor points. `metric` is optional. |
-
-Scalar point example:
-
-```sh
-curl -s -X POST "$BASE/v1/devices/$DEVICE_ID/health/metrics" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "points": [
-      {
-        "ts_utc": "2026-05-19T08:00:00Z",
-        "metric": "heart_rate",
-        "value": 78,
-        "unit": "bpm",
-        "source": "device_auto"
-      }
-    ]
-  }'
-```
-
-Multi-value point example for blood pressure or raw SDK packets:
+Each synchronized historical SDK day is explicit:
 
 ```json
 {
-  "ts_utc": "2026-05-19T08:00:00Z",
-  "metric": "blood_pressure",
-  "values": {"sbp": 118, "dbp": 76},
-  "unit": "mmHg",
-  "source": "device_manual",
-  "metadata": {"sdk_class": "StopHeartRateRsp"}
+  "days": [
+    {"date":"2026-09-14"},
+    {"date":"2026-09-15"},
+    {"date":"2026-09-16"}
+  ]
 }
 ```
+
+The backend does **not** derive a day from the latest measurement timestamp. This matches QRing APIs that synchronize `offset=0..6` / historical day ranges.
+
+Duplicate `date` values inside one request are rejected.
+
+---
+
+# Activity mapping
+
+## Daily activity
+
+The QRing `BleStepTotal` / daily response exposes fields such as total steps, running steps, calorie value, walking distance, sport duration, and sleep duration.
+
+v3 payload:
+
+```json
+{
+  "date": "2026-09-16",
+  "activity": {
+    "totalSteps": 717,
+    "runningSteps": 20,
+    "caloriesRaw": 28390,
+    "caloriesKcal": 28.39,
+    "distanceM": 493,
+    "sportDurationS": 1740,
+    "sleepDurationS": 25860
+  }
+}
+```
+
+### Important unit rule
+
+The backend never silently multiplies or divides calorie values. The SDK exposes raw calorie values and some SDK target APIs use scaled values. Therefore:
+
+- `caloriesRaw`: preserve the exact integer returned by the device/SDK.
+- `caloriesKcal`: optional normalized kcal computed by the frontend only when the SDK/model semantics are known.
+
+Likewise, `sportDurationS` and `sleepDurationS` are explicitly **seconds**. The old ambiguous `activeTime` field is no longer part of v3.
+
+## 15-minute activity buckets
+
+`BleStepDetails` is naturally modeled using the SDK `timeIndex` (`0..95`):
+
+```json
+{
+  "activityBuckets": [
+    {
+      "timeIndex": 32,
+      "walkSteps": 110,
+      "runSteps": 10,
+      "caloriesRaw": 8000,
+      "caloriesKcal": 8.0,
+      "distanceM": 95
+    }
+  ]
+}
+```
+
+The backend calculates `ts_utc` from:
+
+```text
+day.date + timeIndex * 15 minutes + tzOffsetMin
+```
+
+This preserves device-local day semantics and avoids UTC-midnight grouping errors.
+
+---
+
+# Measurements
+
+All scalar/multi-value health measurements use one normalized structure and are written to `health_metrics`.
+
+```json
+{
+  "metric": "heart_rate",
+  "ts": "2026-09-16T08:00:00Z",
+  "value": 77,
+  "unit": "bpm",
+  "measurementMode": "history_sync",
+  "sampleIntervalSec": 300,
+  "source": "qring_sdk_v3"
+}
+```
+
+A measurement can identify its time in either form:
+
+- RFC3339/RFC3339Nano `ts`, or
+- device-local `minuteOfDay` (`0..1439`) relative to `day.date`.
+
+### Measurement fields
+
+| Field | Purpose |
+|---|---|
+| `metric` | Canonical metric name. |
+| `value` | Main normalized scalar value. |
+| `values` | Multi-value normalized reading. |
+| `rawValue` | Original SDK numeric value when scaling/conversion exists. |
+| `rawValues` | Original multi-channel values. |
+| `unit` | `bpm`, `%`, `mmHg`, `celsius`, `ms`, `score`, etc. |
+| `measurementMode` | Provenance such as `automatic`, `history_sync`, `manual`, `one_click`, `realtime`, `derived`. |
+| `sessionId` | Correlates measurements produced by one manual/one-click session. |
+| `sampleIntervalSec` | Original sampling interval when known. |
+| `errorCode` | SDK measurement error/status code. |
+| `derived` | Whether value was calculated rather than directly measured. |
+| `algorithm` | Calculation algorithm name when derived. |
+| `metadata` | SDK/model-specific details that should not become schema columns. |
 
 Recommended metric names:
 
 ```text
-heart_rate, blood_oxygen, blood_pressure, hrv, stress, temperature,
-rri, raw_ppg, battery_level
+heart_rate
+spo2
+blood_pressure
+hrv
+stress
+temperature
+rri
+battery_level
 ```
 
-Duplicate points with the same `device_id + metric + ts_utc + source` are
-skipped by the backend key collection.
+Additional metrics are allowed; `metric` is normalized to lowercase snake case.
 
-## Device Events
+## Heart rate history
 
-Use this route for qring SDK notifications and raw events that are not direct
-health measurements, such as battery notifications, touch events, sedentary
-events, and vendor payloads from `DeviceNotifyRsp`.
+For `ReadHeartRateRsp`, create individual points at the SDK sampling interval (commonly 5 minutes) and set:
 
-| Method | Route | Description |
-| --- | --- | --- |
-| `POST` | `/v1/devices/{device_id}/events` | Idempotent ingest for device events. |
-| `GET` | `/v1/devices/{device_id}/events?from=RFC3339&to=RFC3339&event_type=battery` | List device events. `event_type` is optional. |
+```json
+{
+  "metric": "heart_rate",
+  "minuteOfDay": 480,
+  "value": 77,
+  "unit": "bpm",
+  "measurementMode": "history_sync",
+  "sampleIntervalSec": 300
+}
+```
 
-```sh
-curl -s -X POST "$BASE/v1/devices/$DEVICE_ID/events" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "events": [
-      {
-        "ts_utc": "2026-05-19T08:00:00Z",
-        "event_type": "battery",
-        "source": "device_notify",
-        "payload": {"battery_level": 82, "charging": false}
+## SpO2 hourly min/max
+
+`BloodOxygenEntity` provides per-hour minimum and maximum values. Preserve both:
+
+```json
+{
+  "metric": "spo2",
+  "minuteOfDay": 480,
+  "values": {"min":95,"max":98},
+  "unit": "%",
+  "measurementMode": "history_sync",
+  "sampleIntervalSec": 3600
+}
+```
+
+## Stress and HRV raw scaling
+
+When the SDK provides a raw array value that the app divides/scales for display, store both raw and normalized values:
+
+```json
+{
+  "metric": "stress",
+  "minuteOfDay": 600,
+  "value": 34.2,
+  "rawValue": 342,
+  "unit": "score",
+  "sampleIntervalSec": 1800,
+  "measurementMode": "history_sync"
+}
+```
+
+## Temperature channels
+
+The current AAR exposes main and side temperature channels. Preserve them using `values` / `rawValues`:
+
+```json
+{
+  "metric": "temperature",
+  "ts": "2026-09-16T08:30:00Z",
+  "value": 36.7,
+  "values": {
+    "side": 35.2,
+    "side1": 35.1
+  },
+  "unit": "celsius",
+  "measurementMode": "manual"
+}
+```
+
+## Blood pressure provenance
+
+Do not mix device-measured and SDK-derived BP without provenance:
+
+```json
+{
+  "metric": "blood_pressure",
+  "ts": "2026-09-16T08:40:00Z",
+  "values": {
+    "systolic": 118,
+    "diastolic": 76,
+    "heart_rate": 72
+  },
+  "unit": "mmHg",
+  "measurementMode": "manual",
+  "derived": false
+}
+```
+
+If the frontend intentionally sends a value calculated by an SDK algorithm:
+
+```json
+{
+  "metric": "blood_pressure",
+  "ts": "2026-09-16T08:40:00Z",
+  "values": {"systolic":118,"diastolic":76},
+  "unit": "mmHg",
+  "measurementMode": "derived",
+  "derived": true,
+  "algorithm": "CalcBloodPressureByHeart"
+}
+```
+
+---
+
+# Manual and one-click measurements
+
+Use `measurementMode` and a shared `sessionId` to correlate values returned from one operation:
+
+```json
+{
+  "measurements": [
+    {
+      "metric":"heart_rate",
+      "ts":"2026-09-16T09:00:00Z",
+      "value":76,
+      "unit":"bpm",
+      "measurementMode":"one_click",
+      "sessionId":"m-20260916-001",
+      "errorCode":0
+    },
+    {
+      "metric":"hrv",
+      "ts":"2026-09-16T09:00:00Z",
+      "value":42,
+      "unit":"ms",
+      "measurementMode":"one_click",
+      "sessionId":"m-20260916-001",
+      "errorCode":0
+    }
+  ]
+}
+```
+
+The v3 idempotency key includes `measurement_mode`, `session_id`, and `source`, so an automatic and a manual measurement can coexist at the same timestamp.
+
+---
+
+# Sleep
+
+v3 models **sessions**, not only one nightly row. This supports all-day sleep and the SDK new sleep protocol with lunch/nap sleep.
+
+```json
+{
+  "sleepSessions": [
+    {
+      "sessionId": "sleep-main-20260916",
+      "type": "main",
+      "protocol": "new_sleep_protocol",
+      "start": "2026-09-15T15:30:00Z",
+      "end": "2026-09-15T23:00:00Z",
+      "wakingCount": 2,
+      "segments": [
+        {"durationS":1800,"stageCode":2},
+        {"durationS":3600,"stageCode":3},
+        {"durationS":1200,"stageCode":4},
+        {"durationS":300,"stageCode":5}
+      ]
+    },
+    {
+      "sessionId": "sleep-nap-20260916",
+      "type": "nap",
+      "protocol": "new_sleep_protocol",
+      "start": "2026-09-16T05:00:00Z",
+      "end": "2026-09-16T05:35:00Z",
+      "segments": [
+        {"durationS":2100,"stageCode":2}
+      ]
+    }
+  ]
+}
+```
+
+Segments may use explicit `start`/`end` timestamps or sequential `durationS`. When timestamps are omitted, segments are chained from the session start.
+
+### New sleep protocol stage codes
+
+| Code | Normalized stage |
+|---:|---|
+| 0 | `not_sleeping` |
+| 1 | `off_wrist` |
+| 2 | `light` |
+| 3 | `deep` |
+| 4 | `rem` |
+| 5 | `awake` |
+
+### Legacy sleep codes
+
+| Code | Normalized stage |
+|---:|---|
+| 1 | `deep` |
+| 2 | `light` |
+| 3 | `awake` |
+
+If `stage` is explicitly provided, it wins over numeric-code inference.
+
+The backend stores each session in `sleep_sessions`, each timeline point in `sleep_segments`, and recalculates `sleep_summary` for that device/date from **all sessions**. This prevents a nap from overwriting the main sleep session.
+
+---
+
+# Targets / goals
+
+QRing target settings include steps, calorie, distance, sport duration, and sleep duration. Use explicit units:
+
+```json
+{
+  "targets": [
+    {"kind":"steps","value":717,"target":4000,"unit":"steps"},
+    {"kind":"calories","value":28.39,"target":500,"unit":"kcal"},
+    {"kind":"distance","value":0.493,"target":4,"unit":"km"},
+    {"kind":"sport_duration","value":29,"target":60,"unit":"minute"},
+    {"kind":"sleep_duration","value":431,"target":480,"unit":"minute"}
+  ]
+}
+```
+
+---
+
+# Workouts
+
+`SportPlusEntity` maps directly into v3 workout fields:
+
+```json
+{
+  "workouts": [
+    {
+      "startUtc": "2026-09-16T00:15:00Z",
+      "endUtc": "2026-09-16T00:55:00Z",
+      "sportTypeId": 7,
+      "sportTypeName": "running",
+      "durationS": 2400,
+      "distanceM": 5200,
+      "calories": 310.5,
+      "avgHr": 142,
+      "minHr": 91,
+      "maxHr": 174,
+      "avgSpeedCmS": 217,
+      "maxSpeedCmS": 330,
+      "elevationCm": 2300,
+      "uphillCm": 12000,
+      "downhillCm": 11000,
+      "avgCadenceSpm": 166,
+      "sportCount": 1,
+      "steps": 6400,
+      "locations": [
+        {"rateReal":141},
+        {"rateReal":145}
+      ]
+    }
+  ]
+}
+```
+
+`workouts` remains a regular collection because sessions can be corrected/upserted.
+
+---
+
+# Device events / sedentary data
+
+Non-measurement SDK state changes belong in `device_events`.
+
+Example sedentary synchronization:
+
+```json
+{
+  "events": [
+    {
+      "minuteOfDay": 600,
+      "eventType": "sedentary",
+      "payload": {
+        "state": 1,
+        "durationS": 1800
       }
-    ]
-  }'
+    }
+  ]
+}
 ```
 
-## Sleep
+Suggested state mapping from the SDK sedentary detail:
 
-| Method | Route | Description |
-| --- | --- | --- |
-| `POST` | `/v1/devices/{device_id}/sleep/summary` | Upsert nightly sleep summary. |
-| `GET` | `/v1/devices/{device_id}/sleep/summary?date=YYYY-MM-DD` | Get sleep summary by sleep date. |
-| `POST` | `/v1/devices/{device_id}/sleep/segments` | Idempotent ingest for sleep stage segments. |
-| `GET` | `/v1/devices/{device_id}/sleep/segments?date=YYYY-MM-DD` | List sleep segments from the `sleep_segments` time series collection by sleep date. |
-
-Upsert sleep summary:
-
-```sh
-curl -s -X POST "$BASE/v1/devices/$DEVICE_ID/sleep/summary" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "sleep_date": "2026-05-18",
-    "tz_offset_min": 420,
-    "sleep_start_utc": "2026-05-18T15:00:00Z",
-    "wake_utc": "2026-05-18T23:00:00Z",
-    "total_sleep_s": 28800,
-    "deep_s": 5400,
-    "light_s": 16200,
-    "awake_s": 1200,
-    "rem_s": 6000,
-    "source": "device"
-  }'
+```text
+0 = static
+1 = sedentary_triggered
+2 = movement
 ```
 
-Optional fields:
+Other suitable event types include:
 
-| Field | Notes |
-| --- | --- |
-| `sleep_start_utc` | Optional RFC3339. |
-| `wake_utc` | Optional RFC3339. |
-
-Get sleep summary:
-
-```sh
-curl -s "$BASE/v1/devices/$DEVICE_ID/sleep/summary?date=2026-05-18"
+```text
+charging_state
+touch
+gesture
+sport_status
+device_notify
+not_wearing
 ```
 
-Ingest sleep segments:
+---
 
-```sh
-curl -s -X POST "$BASE/v1/devices/$DEVICE_ID/sleep/segments" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "segments": [
-      {
-        "start_utc": "2026-05-18T15:00:00Z",
-        "end_utc": "2026-05-18T15:30:00Z",
-        "sleep_date": "2026-05-18",
-        "tz_offset_min": 420,
-        "stage": "light",
-        "source": "device"
+# Optional raw sensor samples
+
+Raw PPG/accelerometer diagnostic values are intentionally separated from `health_metrics` because their volume can be much higher.
+
+```json
+{
+  "rawSamples": [
+    {
+      "ts": "2026-09-16T09:00:00.125Z",
+      "sessionId": "raw-001",
+      "sampleIndex": 0,
+      "kind": "ppg_accelerometer",
+      "channels": {
+        "greenLightPpgL": 123,
+        "greenLightPpgH": 2,
+        "redLightPpgL": 112,
+        "redLightPpgH": 1,
+        "infraredPpgL": 98,
+        "infraredPpgH": 1,
+        "xL": 1,
+        "xH": 0,
+        "yL": 2,
+        "yH": 0,
+        "zL": 3,
+        "zH": 0
       }
-    ]
-  }'
+    }
+  ]
+}
 ```
 
-Supported stage values by convention:
+The backend intentionally stores `channels` as a flexible numeric map. It does not invent a bit-combination formula for SDK L/H channel fields; combine them in the frontend only when the SDK/vendor definition is known.
+
+Default raw-sensor retention is **30 days**.
+
+---
+
+# Complete multi-day example
+
+```json
+{
+  "deviceUid": "AA:BB:CC:DD:EE:FF",
+  "tzOffsetMin": 420,
+  "device": {
+    "vendor": "QRing",
+    "model": "G69",
+    "hwRev": "1.0",
+    "fwRev": "1.2.3",
+    "sdkVersion": "2025-08-26",
+    "capabilities": {
+      "heartRate": true,
+      "spo2": true,
+      "temperature": true,
+      "hrv": true,
+      "newSleepProtocol": true
+    }
+  },
+  "deviceState": {
+    "batteryPercent": 82,
+    "charging": false,
+    "lastSeenAt": "2026-09-16T09:10:00Z"
+  },
+  "days": [
+    {
+      "date": "2026-09-15",
+      "activity": {
+        "totalSteps": 8200,
+        "runningSteps": 650,
+        "caloriesRaw": 365000,
+        "caloriesKcal": 365.0,
+        "distanceM": 6100,
+        "sportDurationS": 3150,
+        "sleepDurationS": 25440
+      },
+      "activityBuckets": [
+        {"timeIndex":32,"walkSteps":110,"runSteps":10,"caloriesRaw":8000,"caloriesKcal":8,"distanceM":95}
+      ],
+      "measurements": [
+        {"metric":"heart_rate","minuteOfDay":480,"value":77,"unit":"bpm","measurementMode":"history_sync","sampleIntervalSec":300},
+        {"metric":"spo2","minuteOfDay":480,"values":{"min":95,"max":98},"unit":"%","measurementMode":"history_sync","sampleIntervalSec":3600},
+        {"metric":"hrv","minuteOfDay":600,"value":42,"rawValue":420,"unit":"ms","measurementMode":"history_sync","sampleIntervalSec":1800}
+      ],
+      "targets": [
+        {"kind":"steps","value":8200,"target":10000,"unit":"steps"}
+      ]
+    },
+    {
+      "date": "2026-09-16",
+      "activity": {
+        "totalSteps": 717,
+        "runningSteps": 20,
+        "caloriesRaw": 28390,
+        "caloriesKcal": 28.39,
+        "distanceM": 493,
+        "sportDurationS": 1740
+      },
+      "measurements": [
+        {"metric":"heart_rate","ts":"2026-09-16T08:00:00Z","value":77,"unit":"bpm","measurementMode":"automatic"},
+        {"metric":"temperature","ts":"2026-09-16T08:30:00Z","value":36.7,"values":{"side":35.2,"side1":35.1},"unit":"celsius","measurementMode":"manual"}
+      ],
+      "sleepSessions": [
+        {
+          "type":"main",
+          "protocol":"new_sleep_protocol",
+          "start":"2026-09-15T15:30:00Z",
+          "end":"2026-09-15T23:00:00Z",
+          "segments":[
+            {"durationS":3600,"stageCode":3},
+            {"durationS":5400,"stageCode":2},
+            {"durationS":1200,"stageCode":4},
+            {"durationS":300,"stageCode":5}
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+Typical response:
+
+```json
+{
+  "status": "synced",
+  "syncId": "68ca00000000000000000001",
+  "device": {
+    "id": "68ca00000000000000000002",
+    "deviceUid": "AA:BB:CC:DD:EE:FF",
+    "vendor": "QRing",
+    "model": "G69",
+    "batteryPercent": 82,
+    "charging": false
+  },
+  "days": [
+    {
+      "date": "2026-09-15",
+      "upserted": {
+        "dailyActivity": 1,
+        "activityBuckets": 1,
+        "measurements": 3,
+        "targets": 1,
+        "syncMetadata": 1
+      }
+    }
+  ],
+  "upserted": {
+    "deviceState": 1,
+    "dailyActivity": 2,
+    "activityBuckets": 1,
+    "measurements": 6,
+    "sleepSessions": 1,
+    "sleepSegments": 4,
+    "sleepSummaries": 1,
+    "targets": 1,
+    "events": 1,
+    "syncMetadata": 2
+  }
+}
+```
+
+Duplicate immutable points return an inserted count of `0` rather than creating duplicates.
+
+---
+
+# Readback
+
+By stable device UID:
+
+```bash
+curl "$BASE/v3/wearable/range?device_uid=AA%3ABB%3ACC%3ADD%3AEE%3AFF&from=2026-09-01&to=2026-09-16"
+```
+
+By user:
+
+```bash
+curl "$BASE/v3/users/$USER_ID/wearable/range?from=2026-09-01&to=2026-09-16"
+```
+
+The response is grouped by explicit device-local `date` and contains whichever normalized domains exist for that date:
+
+```json
+{
+  "device": {},
+  "from": "2026-09-01",
+  "to": "2026-09-16",
+  "days": [
+    {
+      "date": "2026-09-16",
+      "activity": {},
+      "activityBuckets": [],
+      "measurements": [],
+      "sleepSummary": {},
+      "sleepSessions": [],
+      "targets": [],
+      "workouts": [],
+      "events": []
+    }
+  ]
+}
+```
+
+Dates and timestamps in API responses are camelCase/RFC3339. Arbitrary payload/value/channel keys are preserved rather than rewritten.
+
+---
+
+# Data retention
+
+Defaults are implemented by `db-kala-agem`:
+
+| Data | Collection | Default retention |
+|---|---|---:|
+| Activity buckets | `steps_15m` | 365 days |
+| Health measurements | `health_metrics` | 365 days |
+| Sleep stage timeline | `sleep_segments` | 365 days |
+| Device events | `device_events` | 90 days |
+| Raw PPG/accelerometer samples | `raw_sensor_samples` | 30 days |
+| Idempotency keys | corresponding `*_keys` | measurement retention + 7 days |
+| Daily summaries | `daily_activity`, `sleep_summary` | no TTL |
+| Sleep sessions | `sleep_sessions` | no TTL |
+| Workouts | `workouts` | no TTL |
+| Targets | `total_activities` | no TTL |
+| Device/pairing identity | `devices`, `user_devices` | no TTL |
+
+Raw high-frequency data must not be used as the only source for long-term UI history; normalized measurements/summaries have longer retention.
+
+---
+
+# Idempotency
+
+MongoDB time-series collections cannot use the same unique-index semantics as regular collections. v3 therefore uses regular key collections:
 
 ```text
-deep, light, rem, awake, off_wrist, unknown
+steps_15m_keys
+health_metric_v3_keys
+sleep_segment_v3_keys
+device_event_v3_keys
+raw_sensor_sample_keys
 ```
 
-List sleep segments:
+Key semantics:
 
-```sh
-curl -s "$BASE/v1/devices/$DEVICE_ID/sleep/segments?date=2026-05-18"
-```
+- activity bucket: `device_id + ts_utc`
+- measurement: `device_id + metric + ts_utc + measurement_mode + session_id + source`
+- sleep segment: `device_id + session_id + start_utc`
+- device event: `device_id + event_type + ts_utc + session_id + source`
+- raw sample: `device_id + session_id + ts_utc + sample_index + kind`
 
-Duplicate segments with the same `device_id + start_utc` are skipped by the
-backend key collection.
+Daily activity, sleep sessions, workouts, targets, and sync metadata are mutable regular collections and use upserts.
 
-## Workouts
+---
 
-| Method | Route | Description |
-| --- | --- | --- |
-| `POST` | `/v1/devices/{device_id}/workouts` | Create or upsert workout by `device_id + start_utc`. |
-| `GET` | `/v1/devices/{device_id}/workouts?from=RFC3339&to=RFC3339` | List workouts in a time range. |
-| `PATCH` | `/v1/devices/{device_id}/workouts` | Update workout identified by `start_utc` in body. |
-| `DELETE` | `/v1/devices/{device_id}/workouts?start_utc=RFC3339` | Delete workout by `start_utc`. |
+# Time and date rules
 
-Create workout:
+1. Persist actual instants as UTC BSON `Date`.
+2. Persist device-local grouping date as `YYYY-MM-DD`.
+3. Persist the UTC offset used during sync as `tz_offset_min`.
+4. Activity `timeIndex` is interpreted in the device-local day, not UTC.
+5. Daily queries group using `device_date` / `sleep_date`, not `$dateTrunc(... UTC)`.
+6. Sleep sessions are allowed to cross midnight.
 
-```sh
-curl -s -X POST "$BASE/v1/devices/$DEVICE_ID/workouts" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "start_utc": "2026-05-19T01:00:00Z",
-    "end_utc": "2026-05-19T01:30:00Z",
-    "tz_offset_min": 420,
-    "sport_type_id": 1,
-    "duration_s": 1800,
-    "distance_m": 2500,
-    "calories": 150.5,
-    "avg_hr": 112,
-    "max_hr": 145,
-    "min_hr": 80,
-    "avg_speed_cm_s": 140,
-    "max_speed_cm_s": 220,
-    "elevation_cm": 5000,
-    "uphill_cm": 1200,
-    "downhill_cm": 800,
-    "avg_cadence_spm": 92,
-    "sport_count": 1,
-    "steps": 3400,
-    "locations": [{"rate_real": 115}],
-    "source": "device"
-  }'
-```
-
-List workouts:
-
-```sh
-curl -s "$BASE/v1/devices/$DEVICE_ID/workouts?from=2026-05-19T00:00:00Z&to=2026-05-20T00:00:00Z"
-```
-
-Patch workout:
-
-```sh
-curl -s -X PATCH "$BASE/v1/devices/$DEVICE_ID/workouts" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "start_utc": "2026-05-19T01:00:00Z",
-    "duration_s": 1900,
-    "calories": 160,
-    "source": "device"
-  }'
-```
-
-Delete workout:
-
-```sh
-curl -s -X DELETE "$BASE/v1/devices/$DEVICE_ID/workouts?start_utc=2026-05-19T01:00:00Z"
-```
-
-## Upsert Keys
-
-Mongo collections and indexes are checked on startup. `steps_15m` and
-`sleep_segments` must be MongoDB time series collections.
-
-| Data | Collection type | Upsert or uniqueness key |
-| --- | --- | --- |
-| Devices | Regular | `device_uid` |
-| Steps | Time series plus `steps_15m_keys` | `device_id + ts_utc` |
-| Daily activity | Regular | `device_id + device_date` |
-| Health metrics | Time series plus `health_metric_keys` | `device_id + metric + ts_utc + source` |
-| Device events | Time series plus `device_event_keys` | `device_id + event_type + ts_utc + source` |
-| Sleep summary | Regular | `device_id + sleep_date` |
-| Sleep segments | Time series plus `sleep_segments_keys` | `device_id + start_utc` |
-| Wearable sync snapshots | Regular | `device_uid + sync_date` |
-| Total activity targets | Regular | `device_id + device_date + kind` |
-| Workouts | Regular | `device_id + start_utc` |
-
-## Retention
-
-Raw time-series measurements use MongoDB retention. Fresh collections created
-by the backend use these defaults:
-
-| Data | Collections | Retention |
-| --- | --- | --- |
-| Raw wearable measurements | `steps_15m`, `sleep_segments`, `health_metrics` | 365 days |
-| Raw device events | `device_events` | 90 days |
-| Idempotency keys | `*_keys` collections | matching raw retention plus 7 days |
-| Daily summaries and snapshots | `daily_activity`, `sleep_summary`, `total_activities`, `wearable_syncs` | no TTL |
-| Raw arrays inside snapshots | `wearable_syncs.payload.*.readings`, `wearable_syncs.payload.sleep.segments` | pruned after 180 days |
-
-Existing MongoDB time-series retention is applied by the `db-kala-agem`
-deployment helper, because AGEM connects with the application `readWrite` user.
-
-## Minimal Environment Reference
-
-For API testing, the only required runtime values are the listen address and a
-Mongo connection:
-
-```sh
-ADDR=:8080
-MONGODB_URI=mongodb://user:password@host:57215/regene_kalaagem?authSource=admin
-```
-
-Docker secret files may contain either a raw Mongo URI or:
+Example Jakarta (`tzOffsetMin=420`):
 
 ```text
-MONGODB_URI=mongodb://user:password@host:57215/regene_kalaagem?authSource=admin
+local 2026-09-17 00:00 WIB
+= UTC 2026-09-16 17:00Z
 ```
 
-The backend also accepts the legacy `/etc/app2` secret-file format:
+The stored device date remains `2026-09-17`.
 
-```text
-hosts=host:57215
-user=mongo_user
-pass=mongo_password
-db=regene_kalaagem
-authSource=admin
+---
+
+# SDK-to-v3 mapping checklist
+
+| QRing SDK model/data | v3 payload | MongoDB |
+|---|---|---|
+| `BleStepTotal` | `day.activity` | `daily_activity` |
+| `BleStepDetails` | `day.activityBuckets[]` | `steps_15m` |
+| `ReadHeartRateRsp` | `day.measurements[]` (`heart_rate`) | `health_metrics` |
+| `BloodOxygenEntity` | `measurements[]` (`spo2`, min/max values) | `health_metrics` |
+| `BpDataEntity` / `BlePressure` | `measurements[]` (`blood_pressure`) | `health_metrics` |
+| `PressureRsp` | `measurements[]` (`stress`) | `health_metrics` |
+| `HRVRsp` | `measurements[]` (`hrv`) | `health_metrics` |
+| `TemperatureEntity` / `TemperatureOnceEntity` | `measurements[]` (`temperature`, side channels) | `health_metrics` |
+| manual / one-click response | `measurements[]` + shared `sessionId` | `health_metrics` |
+| `SleepDisplay` | `sleepSessions[]` (`protocol=legacy`) | `sleep_sessions`, `sleep_segments` |
+| `SleepNewProtoResp` | `sleepSessions[]` (`main` + `nap`) | `sleep_sessions`, `sleep_segments` |
+| `LongSitResp` | `events[]` (`sedentary`) | `device_events` |
+| `SportPlusEntity` | `workouts[]` | `workouts` |
+| `BatteryRsp` | `deviceState` | `devices` + battery metric/event |
+| `SetTimeRsp` / `DeviceSupportFunctionRsp` | `device.capabilities` | `devices.capabilities` |
+| raw PPG/accelerometer values | `rawSamples[]` | `raw_sensor_samples` |
+
+Female-cycle support and AI health-report presentation are product features, but the supplied SDK material does not expose enough canonical payload fields to create a safe dedicated server schema. They should be added only when the frontend has an explicit source payload contract; do not invent medical/cycle fields from capability flags alone.
+
+---
+
+# Validation / error semantics
+
+- `400`: invalid wearable payload/date/timestamp/required fields.
+- `404`: user, device, or active pairing not found.
+- `409`: device already has another active owner.
+- `413`: v3 request exceeds 8 MiB.
+- `500`: internal error. Internal MongoDB details are intentionally not returned to clients.
+
+---
+
+# Database initialization
+
+AGEM starts with:
+
+```go
+st.EnsureIndexes(ctx)
+st.EnsureSDKV3Schema(ctx)
 ```
 
-Optional Regene user source:
+The companion `db-kala-agem` repository also creates the same v3 schema and is the deployment-level source for retention/housekeeping settings.
 
-```text
-NASABAH_REGENE=/run/secrets/nasabah_regene_t
-```
+If an existing deployment contains duplicate active pairings, creation of the new partial unique ownership indexes will fail. Clean duplicate active `user_devices` records before deploying the v3 schema.
 
-The Regene secret can use the same `/etc/app2` style, for example:
+---
 
-```text
-hosts=talas51.regene.xyz:57018
-user=regene_reader
-pass=secret
-db=regeneNode
-authSource=admin
-```
+# Notes on authentication
+
+This repository currently focuses on wearable/domain storage and does not add application authentication middleware. In production, protect v3 behind the platform IAM/API gateway or add authenticated user/device middleware before exposing these routes publicly. Pairing and health-data reads must be authorized to the caller, not only validated by path IDs.
