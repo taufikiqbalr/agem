@@ -1,0 +1,46 @@
+# =========================================
+# 1. Build stage
+# =========================================
+FROM golang:1.25.1-alpine AS builder
+
+ENV CGO_ENABLED=0 \
+    GOOS=linux \
+    GOARCH=amd64 \
+    TZ=Asia/Jakarta
+
+RUN apk add --no-cache git tzdata
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN go build -o agem-test ./cmd/api
+
+# =========================================
+# 2. Runtime stage
+# =========================================
+FROM debian:bookworm-slim
+
+ARG APP_PORT=6017
+ENV TZ=Asia/Jakarta \
+    DEBIAN_FRONTEND=noninteractive
+WORKDIR /app
+
+# Install runtime dependencies (timezone & SSL)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates tzdata && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy binary & timezone
+COPY --from=builder /app/agem-test .
+
+EXPOSE ${APP_PORT}
+
+# set user
+RUN id -u www-data >/dev/null 2>&1 || useradd -m www-data
+USER www-data
+
+ENTRYPOINT ["/app/agem-test"]
+

@@ -1,0 +1,2654 @@
+openapi: 3.0.3
+info:
+  title: AGEM Backend API
+  version: 1.0.0
+  description: API for AGEM wearable users, devices, qring sensor data, sleep, and
+    workouts.
+servers:
+- url: http://localhost:8080
+  description: Local development
+tags:
+- name: Health
+- name: Users
+- name: Devices
+- name: Pairings
+- name: Steps
+- name: Activity
+- name: Metrics
+- name: Events
+- name: Sleep
+- name: Workouts
+- name: Wearable v3
+paths:
+  /healthz:
+    get:
+      tags:
+      - Health
+      summary: Health check
+      responses:
+        '200':
+          description: Service is healthy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthzResponse'
+  /v1/users/:
+    post:
+      tags:
+      - Users
+      summary: Create user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+            example:
+              email: user@example.com
+              phone: '+6281234567890'
+      responses:
+        '201':
+          description: Created user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/users/{id}:
+    get:
+      tags:
+      - Users
+      summary: Get user by ID
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: User.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    patch:
+      tags:
+      - Users
+      summary: Update user
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+            example:
+              phone: '+6281312345678'
+      responses:
+        '200':
+          description: Updated user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      tags:
+      - Users
+      summary: Delete user
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          $ref: '#/components/responses/Deleted'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/users/{user_id}/devices:
+    post:
+      tags:
+      - Pairings
+      summary: Pair device to user
+      parameters:
+      - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PairDeviceRequest'
+            example:
+              device_id: 66a000000000000000000001
+              nickname: Daily QRing
+              is_primary: true
+      responses:
+        '201':
+          description: Created pairing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDevice'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    get:
+      tags:
+      - Pairings
+      summary: List user devices
+      parameters:
+      - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Pairing list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserDevice'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/user_devices/{id}:
+    patch:
+      tags:
+      - Pairings
+      summary: Update pairing
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserDeviceRequest'
+            example:
+              nickname: Daily QRing Updated
+              is_primary: true
+              unpaired_at: '2026-07-27T12:00:00Z'
+      responses:
+        '200':
+          description: Updated pairing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDevice'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      tags:
+      - Pairings
+      summary: Delete pairing
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          $ref: '#/components/responses/Deleted'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/devices/:
+    post:
+      tags:
+      - Devices
+      summary: Create device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDeviceRequest'
+            example:
+              vendor: QRing
+              model: QRing Pro
+              hw_rev: A1
+              fw_rev: 1.0.0
+              serial_number: QR-20260727-0001
+              device_uid: qring-aa-bb-cc-01
+      responses:
+        '201':
+          description: Created device.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/devices/{id}:
+    get:
+      tags:
+      - Devices
+      summary: Get device by ID
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Device.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    patch:
+      tags:
+      - Devices
+      summary: Update device
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDeviceRequest'
+            example:
+              fw_rev: 1.0.1
+              last_seen_at: '2026-07-27T02:00:00Z'
+      responses:
+        '200':
+          description: Updated device.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      tags:
+      - Devices
+      summary: Delete device
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          $ref: '#/components/responses/Deleted'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/devices/by_uid/{device_uid}:
+    get:
+      tags:
+      - Devices
+      summary: Get device by stable device UID
+      parameters:
+      - $ref: '#/components/parameters/DeviceUID'
+      responses:
+        '200':
+          description: Device.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/devices/{device_id}/steps15m:
+    post:
+      tags:
+      - Steps
+      summary: Ingest 15-minute step points
+      parameters:
+      - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestSteps15mRequest'
+            example:
+              points:
+              - ts_utc: '2026-07-27T00:00:00Z'
+                device_date: '2026-07-27'
+                time_index: 0
+                tz_offset_min: 420
+                walk_steps: 120
+                run_steps: 10
+                calories: 8
+                distance_m: 95
+                source: device
+      responses:
+        '200':
+          $ref: '#/components/responses/Upserted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    get:
+      tags:
+      - Steps
+      summary: List 15-minute step points by date
+      parameters:
+      - $ref: '#/components/parameters/DeviceId'
+      - $ref: '#/components/parameters/Date'
+      responses:
+        '200':
+          description: Step point list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Steps15mResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/devices/{device_id}/steps/daily:
+    get:
+      tags:
+      - Steps
+      summary: Aggregate daily step totals
+      parameters:
+      - $ref: '#/components/parameters/DeviceId'
+      - $ref: '#/components/parameters/FromTime'
+      - $ref: '#/components/parameters/ToTime'
+      responses:
+        '200':
+          description: Daily step totals.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StepsDailyRow'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/devices/{device_id}/activity/daily:
+    post:
+      tags:
+      - Activity
+      summary: Upsert daily activity total
+      parameters:
+      - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DailyActivityRequest'
+            example:
+              device_date: '2026-07-27'
+              tz_offset_min: 420
+              total_steps: 130
+              running_steps: 10
+              calories: 8
+              walk_distance_m: 95
+              sport_duration_s: 600
+              sleep_duration_s: 25200
+              source: device
+      responses:
+        '200':
+          description: Daily activity row.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyActivityResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    get:
+      tags:
+      - Activity
+      summary: List daily activity totals
+      parameters:
+      - $ref: '#/components/parameters/DeviceId'
+      - $ref: '#/components/parameters/FromDate'
+      - $ref: '#/components/parameters/ToDate'
+      responses:
+        '200':
+          description: Daily activity rows.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DailyActivityResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/devices/{device_id}/health/metrics:
+    post:
+      tags:
+      - Metrics
+      summary: Ingest health metric points
+      parameters:
+      - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestHealthMetricsRequest'
+            example:
+              points:
+              - ts_utc: '2026-07-27T00:05:00Z'
+                metric: heart_rate
+                value: 72
+                unit: bpm
+                source: device
+                metadata:
+                  wearing: true
+      responses:
+        '200':
+          $ref: '#/components/responses/Upserted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    get:
+      tags:
+      - Metrics
+      summary: List health metric points
+      parameters:
+      - $ref: '#/components/parameters/DeviceId'
+      - $ref: '#/components/parameters/FromTime'
+      - $ref: '#/components/parameters/ToTime'
+      - $ref: '#/components/parameters/Metric'
+      responses:
+        '200':
+          description: Health metric rows.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HealthMetricResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/devices/{device_id}/events:
+    post:
+      tags:
+      - Events
+      summary: Ingest device events
+      parameters:
+      - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestDeviceEventsRequest'
+            example:
+              events:
+              - ts_utc: '2026-07-27T00:10:00Z'
+                event_type: battery
+                source: device
+                payload:
+                  level: 88
+                  charging: false
+      responses:
+        '200':
+          $ref: '#/components/responses/Upserted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    get:
+      tags:
+      - Events
+      summary: List device events
+      parameters:
+      - $ref: '#/components/parameters/DeviceId'
+      - $ref: '#/components/parameters/FromTime'
+      - $ref: '#/components/parameters/ToTime'
+      - $ref: '#/components/parameters/EventType'
+      responses:
+        '200':
+          description: Device event rows.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeviceEventResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/devices/{device_id}/sleep/summary:
+    post:
+      tags:
+      - Sleep
+      summary: Upsert sleep summary
+      parameters:
+      - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SleepSummaryRequest'
+            example:
+              sleep_date: '2026-07-27'
+              tz_offset_min: 420
+              sleep_start_utc: '2026-07-26T15:00:00Z'
+              wake_utc: '2026-07-26T22:00:00Z'
+              total_sleep_s: 25200
+              deep_s: 5400
+              light_s: 14400
+              awake_s: 900
+              rem_s: 4500
+              source: device
+      responses:
+        '200':
+          description: Sleep summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SleepSummaryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    get:
+      tags:
+      - Sleep
+      summary: Get sleep summary by date
+      parameters:
+      - $ref: '#/components/parameters/DeviceId'
+      - $ref: '#/components/parameters/Date'
+      responses:
+        '200':
+          description: Sleep summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SleepSummaryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/devices/{device_id}/sleep/segments:
+    post:
+      tags:
+      - Sleep
+      summary: Ingest sleep segments
+      parameters:
+      - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestSleepSegmentsRequest'
+            example:
+              segments:
+              - start_utc: '2026-07-26T15:00:00Z'
+                end_utc: '2026-07-26T15:30:00Z'
+                sleep_date: '2026-07-27'
+                tz_offset_min: 420
+                stage: light
+                source: device
+      responses:
+        '200':
+          $ref: '#/components/responses/Upserted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    get:
+      tags:
+      - Sleep
+      summary: List sleep segments by date
+      parameters:
+      - $ref: '#/components/parameters/DeviceId'
+      - $ref: '#/components/parameters/Date'
+      responses:
+        '200':
+          description: Sleep segments.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SleepSegmentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/devices/{device_id}/workouts:
+    post:
+      tags:
+      - Workouts
+      summary: Upsert workout
+      parameters:
+      - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkoutRequest'
+            example:
+              start_utc: '2026-07-27T01:00:00Z'
+              end_utc: '2026-07-27T01:30:00Z'
+              tz_offset_min: 420
+              sport_type_id: 1
+              duration_s: 1800
+              distance_m: 2500
+              calories: 160.5
+              avg_hr: 128
+              max_hr: 150
+              min_hr: 90
+              steps: 3000
+              locations:
+              - rate_real: 128
+              source: device
+      responses:
+        '201':
+          description: Workout.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkoutResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    get:
+      tags:
+      - Workouts
+      summary: List workouts
+      parameters:
+      - $ref: '#/components/parameters/DeviceId'
+      - $ref: '#/components/parameters/FromTime'
+      - $ref: '#/components/parameters/ToTime'
+      responses:
+        '200':
+          description: Workout list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkoutResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    patch:
+      tags:
+      - Workouts
+      summary: Update workout by start time in body
+      parameters:
+      - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkoutRequest'
+            example:
+              start_utc: '2026-07-27T01:00:00Z'
+              end_utc: '2026-07-27T01:30:00Z'
+              tz_offset_min: 420
+              sport_type_id: 1
+              duration_s: 1800
+              distance_m: 2500
+              calories: 160.5
+              avg_hr: 128
+              max_hr: 150
+              min_hr: 90
+              steps: 3000
+              locations:
+              - rate_real: 128
+              source: device
+      responses:
+        '200':
+          description: Workout.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkoutResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      tags:
+      - Workouts
+      summary: Delete workout by start time
+      parameters:
+      - $ref: '#/components/parameters/DeviceId'
+      - $ref: '#/components/parameters/StartUTC'
+      responses:
+        '200':
+          $ref: '#/components/responses/Deleted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v3/wearable/sync:
+    post:
+      tags:
+      - Wearable v3
+      summary: Sync wearable snapshot
+      description: Stores a QRing-style daily wearable payload, preserves the recognized
+        snapshot, and fans out summary data plus timestamped readings into MongoDB
+        collections.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WearableSyncRequest'
+            example:
+              deviceUid: qring-aa-bb-cc-01
+              tzOffsetMin: 420
+              hrv:
+                current: 42
+                average: 45
+                readingsCount: 2
+                lastUpdated: '2026-07-27T23:44:10.512Z'
+                readings:
+                - ts: '2026-07-27T23:43:10.123Z'
+                  value: 41
+                - ts: '2026-07-27T23:44:10.512Z'
+                  value: 42
+              heartRate:
+                current: 77
+                average: 74
+                min: 58
+                max: 112
+                readingsCount: 2
+                lastUpdated: '2026-07-27T23:44:10.512Z'
+                readings:
+                - ts: '2026-07-27T23:43:10.123Z'
+                  value: 76
+                - ts: '2026-07-27T23:44:10.512Z'
+                  value: 77
+              spo2:
+                current: 97
+                average: 96
+                readingsCount: 1
+                lastUpdated: '2026-07-27T23:44:10.512Z'
+                readings:
+                - ts: '2026-07-27T23:44:10.512Z'
+                  value: 97
+              temperature:
+                current: 36.7
+                average: 36.5
+                raw: 36.72
+                readingsCount: 1
+                lastUpdated: '2026-07-27T23:44:10.512Z'
+                readings:
+                - ts: '2026-07-27T23:44:10.512Z'
+                  value: 36.7
+                  raw: 36.72
+              stress:
+                current: 30
+                average: 34
+                readingsCount: 1
+                lastUpdated: '2026-07-27T23:44:10.512Z'
+                readings:
+                - ts: '2026-07-27T23:44:10.512Z'
+                  value: 30
+              activity:
+                steps: 717
+                calories: 28390.0
+                distance: 493
+                activeTime: 29
+                lastUpdated: '2026-07-27T23:44:10.512Z'
+                readings:
+                - ts: '2026-07-27T08:00:00.000Z'
+                  steps: 120
+                  calories: 8
+                  distance: 95
+                  activeTime: 15
+              sleep:
+                totalMinutes: 431
+                deepMinutes: 92
+                lightMinutes: 268
+                remMinutes: 61
+                awakeMinutes: 10
+                score: 78
+                sleepStart: '2026-07-26T22:41:00.000Z'
+                sleepEnd: '2026-07-27T05:52:00.000Z'
+                lastUpdated: '2026-07-27T23:44:10.512Z'
+                stageData:
+                - 2
+                - 2
+                - 3
+                - 3
+                - 1
+                - 1
+                - 1
+                - 2
+                - 4
+                segments:
+                - start: '2026-07-26T22:41:00.000Z'
+                  end: '2026-07-26T23:11:00.000Z'
+                  stage: light
+              bloodPressure:
+                systolic: 118
+                diastolic: 76
+                heartRate: 72
+                measurementTime: '2026-07-27T07:12:00.000Z'
+                lastUpdated: '2026-07-27T23:44:10.512Z'
+                readings:
+                - ts: '2026-07-27T07:12:00.000Z'
+                  systolic: 118
+                  diastolic: 76
+                  heartRate: 72
+              totalActivities:
+              - kind: steps
+                value: 717.0
+                target: 4000.0
+              - kind: calories
+                value: 28.39
+                target: 500.0
+              - kind: distance
+                value: 0.493
+                target: 4.0
+      responses:
+        '200':
+          description: Sync result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WearableSyncResponse'
+              example:
+                status: synced
+                device_id: 66a000000000000000000001
+                device_uid: qring-aa-bb-cc-01
+                sync_date: '2026-07-27'
+                upserted:
+                  snapshot: 1
+                  health_metrics: 14
+                  daily_activity: 1
+                  steps_15m: 1
+                  sleep_summary: 1
+                  sleep_segments: 1
+                  total_activities: 3
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v3/wearable/range:
+    get:
+      tags:
+      - Wearable v3
+      summary: List synced wearable snapshots
+      description: Returns QRing-style daily wearable snapshots in ascending sync_date
+        order. Dates are inclusive YYYY-MM-DD values; raw readings are omitted unless
+        include_readings=true.
+      parameters:
+      - $ref: '#/components/parameters/DeviceUIDQuery'
+      - $ref: '#/components/parameters/DeviceUIDCamelQuery'
+      - $ref: '#/components/parameters/FromDate'
+      - $ref: '#/components/parameters/ToDate'
+      - $ref: '#/components/parameters/IncludeReadings'
+      responses:
+        '200':
+          description: Wearable snapshot range.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WearableRangeResponse'
+              example:
+                deviceUid: qring-aa-bb-cc-01
+                from: '2026-07-01'
+                to: '2026-07-27'
+                items:
+                - date: '2026-07-27'
+                  deviceUid: qring-aa-bb-cc-01
+                  tzOffsetMin: 420
+                  hrv:
+                    current: 42
+                    average: 45
+                    readingsCount: 2
+                    lastUpdated: '2026-07-27T23:44:10.512Z'
+                  heartRate:
+                    current: 77
+                    average: 74
+                    min: 58
+                    max: 112
+                    readingsCount: 2
+                    lastUpdated: '2026-07-27T23:44:10.512Z'
+                  spo2:
+                    current: 97
+                    average: 96
+                    readingsCount: 1
+                    lastUpdated: '2026-07-27T23:44:10.512Z'
+                  temperature:
+                    current: 36.7
+                    average: 36.5
+                    raw: 36.72
+                    readingsCount: 1
+                    lastUpdated: '2026-07-27T23:44:10.512Z'
+                  stress:
+                    current: 30
+                    average: 34
+                    readingsCount: 1
+                    lastUpdated: '2026-07-27T23:44:10.512Z'
+                  activity:
+                    steps: 717
+                    calories: 28390.0
+                    distance: 493
+                    activeTime: 29
+                    lastUpdated: '2026-07-27T23:44:10.512Z'
+                  sleep:
+                    totalMinutes: 431
+                    deepMinutes: 92
+                    lightMinutes: 268
+                    remMinutes: 61
+                    awakeMinutes: 10
+                    score: 78
+                    sleepStart: '2026-07-26T22:41:00.000Z'
+                    sleepEnd: '2026-07-27T05:52:00.000Z'
+                    lastUpdated: '2026-07-27T23:44:10.512Z'
+                    stageData:
+                    - 2
+                    - 2
+                    - 3
+                    - 3
+                    - 1
+                    - 1
+                    - 1
+                    - 2
+                    - 4
+                  bloodPressure:
+                    systolic: 118
+                    diastolic: 76
+                    heartRate: 72
+                    measurementTime: '2026-07-27T07:12:00.000Z'
+                    lastUpdated: '2026-07-27T23:44:10.512Z'
+                  totalActivities:
+                  - kind: steps
+                    value: 717.0
+                    target: 4000.0
+                  - kind: calories
+                    value: 28.39
+                    target: 500.0
+                  - kind: distance
+                    value: 0.493
+                    target: 4.0
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v3/users/{user_id}/wearable/range:
+    get:
+      tags:
+      - Wearable v3
+      summary: List user wearable snapshots
+      description: Returns QRing-style daily wearable snapshots grouped by devices
+        paired to the user. Dates are inclusive YYYY-MM-DD values; raw readings
+        are omitted unless include_readings=true.
+      parameters:
+      - $ref: '#/components/parameters/UserId'
+      - $ref: '#/components/parameters/FromDate'
+      - $ref: '#/components/parameters/ToDate'
+      - $ref: '#/components/parameters/IncludeReadings'
+      responses:
+        '200':
+          description: Wearable snapshot range grouped by paired devices.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserWearableRangeResponse'
+              example:
+                user_id: 66a000000000000000000100
+                from: '2026-07-01'
+                to: '2026-07-27'
+                devices:
+                - user_device_id: 66a000000000000000000200
+                  device_id: 66a000000000000000000001
+                  deviceUid: qring-aa-bb-cc-01
+                  nickname: daily ring
+                  is_primary: true
+                  paired_at: '2026-07-01T00:00:00Z'
+                  items:
+                  - date: '2026-07-27'
+                    deviceUid: qring-aa-bb-cc-01
+                    tzOffsetMin: 420
+                    hrv:
+                      current: 42
+                      average: 45
+                      readingsCount: 2
+                      lastUpdated: '2026-07-27T23:44:10.512Z'
+                    activity:
+                      steps: 717
+                      calories: 28390.0
+                      distance: 493
+                      activeTime: 29
+                      lastUpdated: '2026-07-27T23:44:10.512Z'
+                    totalActivities:
+                    - kind: steps
+                      value: 717.0
+                      target: 4000.0
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: API document ID.
+    UserId:
+      name: user_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: User ID.
+    DeviceId:
+      name: device_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Device ID.
+    DeviceUID:
+      name: device_uid
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Stable wearable UID or MAC address.
+    Date:
+      name: date
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date
+      description: Device-local date.
+    FromTime:
+      name: from
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date-time
+      description: Inclusive RFC3339 start timestamp.
+    ToTime:
+      name: to
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date-time
+      description: Exclusive RFC3339 end timestamp.
+    FromDate:
+      name: from
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date
+      description: Inclusive device-local start date.
+    ToDate:
+      name: to
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date
+      description: Inclusive device-local end date.
+    Metric:
+      name: metric
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Optional metric filter, for example heart_rate.
+    EventType:
+      name: event_type
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Optional event type filter, for example battery.
+    StartUTC:
+      name: start_utc
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date-time
+      description: Workout start timestamp.
+    DeviceUIDQuery:
+      name: device_uid
+      in: query
+      required: true
+      schema:
+        type: string
+      description: Stable wearable UID. The camelCase alias deviceUid is also accepted.
+    DeviceUIDCamelQuery:
+      name: deviceUid
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Alias for device_uid.
+    IncludeReadings:
+      name: include_readings
+      in: query
+      required: false
+      schema:
+        type: boolean
+        default: false
+      description: When true, include raw readings and sleep segments in each returned
+        snapshot.
+  responses:
+    BadRequest:
+      description: Invalid request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ServerError:
+      description: Internal server error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Deleted:
+      description: Deleted.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/DeleteResponse'
+    Upserted:
+      description: Ingest result.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpsertResponse'
+  schemas:
+    HealthzResponse:
+      type: object
+      required:
+      - status
+      properties:
+        status:
+          type: string
+          example: ok
+    ErrorResponse:
+      type: object
+      required:
+      - error
+      properties:
+        error:
+          type: string
+    DeleteResponse:
+      type: object
+      required:
+      - status
+      properties:
+        status:
+          type: string
+          example: deleted
+    UpsertResponse:
+      type: object
+      required:
+      - upserted
+      properties:
+        upserted:
+          type: integer
+          format: int64
+          minimum: 0
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        phone:
+          type: string
+      additionalProperties: false
+      example:
+        email: user@example.com
+        phone: '+6281234567890'
+    UpdateUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        phone:
+          type: string
+      additionalProperties: false
+      example:
+        phone: '+6281312345678'
+    Device:
+      type: object
+      required:
+      - id
+      - vendor
+      - device_uid
+      - first_seen_at
+      - created_at
+      - updated_at
+      properties:
+        id:
+          type: string
+        vendor:
+          type: string
+        model:
+          type: string
+          nullable: true
+        hw_rev:
+          type: string
+          nullable: true
+        fw_rev:
+          type: string
+          nullable: true
+        serial_number:
+          type: string
+          nullable: true
+        device_uid:
+          type: string
+        first_seen_at:
+          type: string
+          format: date-time
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateDeviceRequest:
+      type: object
+      required:
+      - vendor
+      - device_uid
+      properties:
+        vendor:
+          type: string
+        model:
+          type: string
+        hw_rev:
+          type: string
+        fw_rev:
+          type: string
+        serial_number:
+          type: string
+        device_uid:
+          type: string
+      additionalProperties: false
+      example:
+        vendor: QRing
+        model: QRing Pro
+        hw_rev: A1
+        fw_rev: 1.0.0
+        serial_number: QR-20260727-0001
+        device_uid: qring-aa-bb-cc-01
+    UpdateDeviceRequest:
+      type: object
+      properties:
+        vendor:
+          type: string
+        model:
+          type: string
+        hw_rev:
+          type: string
+        fw_rev:
+          type: string
+        serial_number:
+          type: string
+        last_seen_at:
+          type: string
+          format: date-time
+      additionalProperties: false
+      example:
+        fw_rev: 1.0.1
+        last_seen_at: '2026-07-27T02:00:00Z'
+    PairDeviceRequest:
+      type: object
+      required:
+      - device_id
+      properties:
+        device_id:
+          type: string
+        nickname:
+          type: string
+        is_primary:
+          type: boolean
+      additionalProperties: false
+      example:
+        device_id: 66a000000000000000000001
+        nickname: Daily QRing
+        is_primary: true
+    UpdateUserDeviceRequest:
+      type: object
+      properties:
+        nickname:
+          type: string
+        is_primary:
+          type: boolean
+        unpaired_at:
+          type: string
+          format: date-time
+          nullable: true
+      additionalProperties: false
+      example:
+        nickname: Daily QRing Updated
+        is_primary: true
+        unpaired_at: '2026-07-27T12:00:00Z'
+    UserDevice:
+      type: object
+      required:
+      - id
+      - user_id
+      - device_id
+      - is_primary
+      - paired_at
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        device_id:
+          type: string
+        nickname:
+          type: string
+          nullable: true
+        is_primary:
+          type: boolean
+        paired_at:
+          type: string
+          format: date-time
+        unpaired_at:
+          type: string
+          format: date-time
+          nullable: true
+    Step15mPoint:
+      type: object
+      required:
+      - ts_utc
+      - device_date
+      - time_index
+      properties:
+        ts_utc:
+          type: string
+          format: date-time
+        device_date:
+          type: string
+          format: date
+        time_index:
+          type: integer
+          minimum: 0
+          maximum: 95
+        tz_offset_min:
+          type: integer
+        walk_steps:
+          type: integer
+        run_steps:
+          type: integer
+        calories:
+          type: integer
+        distance_m:
+          type: integer
+        source:
+          type: string
+        sport_duration_s:
+          type: integer
+          description: Active duration in seconds for the 15-minute bucket.
+      additionalProperties: false
+      example:
+        ts_utc: '2026-07-27T00:00:00Z'
+        device_date: '2026-07-27'
+        time_index: 0
+        tz_offset_min: 420
+        walk_steps: 120
+        run_steps: 10
+        calories: 8
+        distance_m: 95
+        source: device
+        sport_duration_s: 600
+    IngestSteps15mRequest:
+      type: object
+      required:
+      - points
+      properties:
+        points:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/Step15mPoint'
+      additionalProperties: false
+      example:
+        points:
+        - ts_utc: '2026-07-27T00:00:00Z'
+          device_date: '2026-07-27'
+          time_index: 0
+          tz_offset_min: 420
+          walk_steps: 120
+          run_steps: 10
+          calories: 8
+          distance_m: 95
+          source: device
+    Steps15mResponse:
+      allOf:
+      - $ref: '#/components/schemas/Step15mPoint'
+      - type: object
+        required:
+        - synced_at
+        properties:
+          synced_at:
+            type: string
+            format: date-time
+      properties:
+        sport_duration_s:
+          type: integer
+          description: Active duration in seconds for the 15-minute bucket.
+      example:
+        sport_duration_s: 600
+    StepsDailyRow:
+      type: object
+      properties:
+        day_utc:
+          type: string
+          format: date-time
+        total_steps:
+          type: integer
+          format: int64
+        running_steps:
+          type: integer
+          format: int64
+        calories:
+          type: integer
+          format: int64
+        distance_m:
+          type: integer
+          format: int64
+        last_synced_at:
+          type: string
+          format: date-time
+    DailyActivityRequest:
+      type: object
+      required:
+      - device_date
+      properties:
+        device_date:
+          type: string
+          format: date
+        tz_offset_min:
+          type: integer
+        total_steps:
+          type: integer
+        running_steps:
+          type: integer
+        calories:
+          type: integer
+        walk_distance_m:
+          type: integer
+        sport_duration_s:
+          type: integer
+        sleep_duration_s:
+          type: integer
+        source:
+          type: string
+      additionalProperties: false
+      example:
+        device_date: '2026-07-27'
+        tz_offset_min: 420
+        total_steps: 130
+        running_steps: 10
+        calories: 8
+        walk_distance_m: 95
+        sport_duration_s: 600
+        sleep_duration_s: 25200
+        source: device
+    DailyActivityResponse:
+      allOf:
+      - $ref: '#/components/schemas/DailyActivityRequest'
+      - type: object
+        required:
+        - device_id
+        - synced_at
+        properties:
+          device_id:
+            type: string
+          synced_at:
+            type: string
+            format: date-time
+    HealthMetricPoint:
+      type: object
+      required:
+      - ts_utc
+      - metric
+      properties:
+        ts_utc:
+          type: string
+          format: date-time
+        metric:
+          type: string
+          example: heart_rate
+        value:
+          type: number
+          format: double
+          nullable: true
+        values:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+        unit:
+          type: string
+          example: bpm
+        source:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+      additionalProperties: false
+      example:
+        ts_utc: '2026-07-27T00:05:00Z'
+        metric: heart_rate
+        value: 72
+        unit: bpm
+        source: device
+        metadata:
+          wearing: true
+    IngestHealthMetricsRequest:
+      type: object
+      required:
+      - points
+      properties:
+        points:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/HealthMetricPoint'
+      additionalProperties: false
+      example:
+        points:
+        - ts_utc: '2026-07-27T00:05:00Z'
+          metric: heart_rate
+          value: 72
+          unit: bpm
+          source: device
+          metadata:
+            wearing: true
+    HealthMetricResponse:
+      allOf:
+      - $ref: '#/components/schemas/HealthMetricPoint'
+      - type: object
+        required:
+        - device_id
+        - source
+        - synced_at
+        properties:
+          device_id:
+            type: string
+          synced_at:
+            type: string
+            format: date-time
+    DeviceEventPoint:
+      type: object
+      required:
+      - ts_utc
+      - event_type
+      properties:
+        ts_utc:
+          type: string
+          format: date-time
+        event_type:
+          type: string
+          example: battery
+        source:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+      additionalProperties: false
+      example:
+        ts_utc: '2026-07-27T00:10:00Z'
+        event_type: battery
+        source: device
+        payload:
+          level: 88
+          charging: false
+    IngestDeviceEventsRequest:
+      type: object
+      required:
+      - events
+      properties:
+        events:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/DeviceEventPoint'
+      additionalProperties: false
+      example:
+        events:
+        - ts_utc: '2026-07-27T00:10:00Z'
+          event_type: battery
+          source: device
+          payload:
+            level: 88
+            charging: false
+    DeviceEventResponse:
+      allOf:
+      - $ref: '#/components/schemas/DeviceEventPoint'
+      - type: object
+        required:
+        - device_id
+        - source
+        - synced_at
+        properties:
+          device_id:
+            type: string
+          synced_at:
+            type: string
+            format: date-time
+    SleepSummaryRequest:
+      type: object
+      required:
+      - sleep_date
+      properties:
+        sleep_date:
+          type: string
+          format: date
+        tz_offset_min:
+          type: integer
+        sleep_start_utc:
+          type: string
+          format: date-time
+        wake_utc:
+          type: string
+          format: date-time
+        total_sleep_s:
+          type: integer
+        deep_s:
+          type: integer
+        light_s:
+          type: integer
+        awake_s:
+          type: integer
+        rem_s:
+          type: integer
+        source:
+          type: string
+      additionalProperties: false
+      example:
+        sleep_date: '2026-07-27'
+        tz_offset_min: 420
+        sleep_start_utc: '2026-07-26T15:00:00Z'
+        wake_utc: '2026-07-26T22:00:00Z'
+        total_sleep_s: 25200
+        deep_s: 5400
+        light_s: 14400
+        awake_s: 900
+        rem_s: 4500
+        source: device
+    SleepSummaryResponse:
+      allOf:
+      - $ref: '#/components/schemas/SleepSummaryRequest'
+      - type: object
+        required:
+        - device_id
+        - synced_at
+        properties:
+          device_id:
+            type: string
+          synced_at:
+            type: string
+            format: date-time
+          score:
+            type: integer
+            nullable: true
+          stage_data:
+            type: array
+            items:
+              type: integer
+    SleepSegment:
+      type: object
+      required:
+      - start_utc
+      - end_utc
+      - sleep_date
+      properties:
+        start_utc:
+          type: string
+          format: date-time
+        end_utc:
+          type: string
+          format: date-time
+        sleep_date:
+          type: string
+          format: date
+        tz_offset_min:
+          type: integer
+        stage:
+          type: string
+          enum:
+          - deep
+          - light
+          - rem
+          - awake
+          - off_wrist
+          - unknown
+        source:
+          type: string
+      additionalProperties: false
+      example:
+        start_utc: '2026-07-26T15:00:00Z'
+        end_utc: '2026-07-26T15:30:00Z'
+        sleep_date: '2026-07-27'
+        tz_offset_min: 420
+        stage: light
+        source: device
+    IngestSleepSegmentsRequest:
+      type: object
+      required:
+      - segments
+      properties:
+        segments:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/SleepSegment'
+      additionalProperties: false
+      example:
+        segments:
+        - start_utc: '2026-07-26T15:00:00Z'
+          end_utc: '2026-07-26T15:30:00Z'
+          sleep_date: '2026-07-27'
+          tz_offset_min: 420
+          stage: light
+          source: device
+    SleepSegmentResponse:
+      allOf:
+      - $ref: '#/components/schemas/SleepSegment'
+      - type: object
+        required:
+        - synced_at
+        properties:
+          synced_at:
+            type: string
+            format: date-time
+    WorkoutLocation:
+      type: object
+      properties:
+        rate_real:
+          type: integer
+      additionalProperties: false
+    WorkoutRequest:
+      type: object
+      required:
+      - start_utc
+      properties:
+        start_utc:
+          type: string
+          format: date-time
+        end_utc:
+          type: string
+          format: date-time
+        tz_offset_min:
+          type: integer
+        sport_type_id:
+          type: integer
+          nullable: true
+        duration_s:
+          type: integer
+          nullable: true
+        distance_m:
+          type: integer
+          nullable: true
+        calories:
+          type: number
+          format: double
+          nullable: true
+        avg_hr:
+          type: integer
+          nullable: true
+        max_hr:
+          type: integer
+          nullable: true
+        min_hr:
+          type: integer
+          nullable: true
+        avg_speed_cm_s:
+          type: integer
+          nullable: true
+        max_speed_cm_s:
+          type: integer
+          nullable: true
+        elevation_cm:
+          type: integer
+          nullable: true
+        uphill_cm:
+          type: integer
+          nullable: true
+        downhill_cm:
+          type: integer
+          nullable: true
+        avg_cadence_spm:
+          type: integer
+          nullable: true
+        sport_count:
+          type: integer
+          nullable: true
+        steps:
+          type: integer
+          nullable: true
+        locations:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkoutLocation'
+        source:
+          type: string
+      additionalProperties: false
+      example:
+        start_utc: '2026-07-27T01:00:00Z'
+        end_utc: '2026-07-27T01:30:00Z'
+        tz_offset_min: 420
+        sport_type_id: 1
+        duration_s: 1800
+        distance_m: 2500
+        calories: 160.5
+        avg_hr: 128
+        max_hr: 150
+        min_hr: 90
+        steps: 3000
+        locations:
+        - rate_real: 128
+        source: device
+    WorkoutResponse:
+      allOf:
+      - $ref: '#/components/schemas/WorkoutRequest'
+      - type: object
+        required:
+        - device_id
+        - source
+        - synced_at
+        properties:
+          device_id:
+            type: string
+          synced_at:
+            type: string
+            format: date-time
+    WearableMetricSection:
+      type: object
+      properties:
+        current:
+          type: number
+          format: double
+        average:
+          type: number
+          format: double
+        min:
+          type: number
+          format: double
+        max:
+          type: number
+          format: double
+        raw:
+          type: number
+          format: double
+        readingsCount:
+          type: number
+          format: double
+        lastUpdated:
+          type: string
+          format: date-time
+        readings:
+          type: array
+          items:
+            $ref: '#/components/schemas/WearableMetricReading'
+      additionalProperties: true
+    WearableActivitySection:
+      type: object
+      properties:
+        steps:
+          type: number
+          format: double
+        calories:
+          type: number
+          format: double
+        distance:
+          type: number
+          format: double
+        activeTime:
+          type: number
+          format: double
+          description: Active minutes.
+        lastUpdated:
+          type: string
+          format: date-time
+        readings:
+          type: array
+          items:
+            $ref: '#/components/schemas/WearableActivityReading'
+      additionalProperties: true
+    WearableSleepSection:
+      type: object
+      properties:
+        totalMinutes:
+          type: number
+          format: double
+        deepMinutes:
+          type: number
+          format: double
+        lightMinutes:
+          type: number
+          format: double
+        remMinutes:
+          type: number
+          format: double
+        awakeMinutes:
+          type: number
+          format: double
+        score:
+          type: number
+          format: double
+        sleepStart:
+          type: string
+          format: date-time
+        sleepEnd:
+          type: string
+          format: date-time
+        lastUpdated:
+          type: string
+          format: date-time
+        stageData:
+          type: array
+          items:
+            type: integer
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/WearableSleepSegment'
+      additionalProperties: true
+    WearableBloodPressureSection:
+      type: object
+      properties:
+        systolic:
+          type: number
+          format: double
+        diastolic:
+          type: number
+          format: double
+        heartRate:
+          type: number
+          format: double
+        measurementTime:
+          type: string
+          format: date-time
+        lastUpdated:
+          type: string
+          format: date-time
+        readings:
+          type: array
+          items:
+            $ref: '#/components/schemas/WearableBloodPressureReading'
+      additionalProperties: true
+    WearableTotalActivity:
+      type: object
+      properties:
+        value:
+          type: number
+          format: double
+        target:
+          type: number
+          format: double
+        kind:
+          type: string
+          example: steps
+      additionalProperties: true
+    WearableSyncRequest:
+      type: object
+      required:
+      - deviceUid
+      properties:
+        deviceUid:
+          type: string
+          example: qring-aa-bb-cc-01
+        device_uid:
+          type: string
+          description: Alias for deviceUid.
+        hrv:
+          $ref: '#/components/schemas/WearableMetricSection'
+        heartRate:
+          $ref: '#/components/schemas/WearableMetricSection'
+        spo2:
+          $ref: '#/components/schemas/WearableMetricSection'
+        temperature:
+          $ref: '#/components/schemas/WearableMetricSection'
+        stress:
+          $ref: '#/components/schemas/WearableMetricSection'
+        activity:
+          $ref: '#/components/schemas/WearableActivitySection'
+        sleep:
+          $ref: '#/components/schemas/WearableSleepSection'
+        bloodPressure:
+          $ref: '#/components/schemas/WearableBloodPressureSection'
+        totalActivities:
+          type: array
+          items:
+            $ref: '#/components/schemas/WearableTotalActivity'
+        tzOffsetMin:
+          type: integer
+          default: 0
+          example: 420
+      additionalProperties: true
+      description: Unknown fields are ignored. Summary fields and optional timestamped
+        readings are preserved and normalized.
+      example:
+        deviceUid: qring-aa-bb-cc-01
+        tzOffsetMin: 420
+        hrv:
+          current: 42
+          average: 45
+          readingsCount: 2
+          lastUpdated: '2026-07-27T23:44:10.512Z'
+          readings:
+          - ts: '2026-07-27T23:43:10.123Z'
+            value: 41
+          - ts: '2026-07-27T23:44:10.512Z'
+            value: 42
+        heartRate:
+          current: 77
+          average: 74
+          min: 58
+          max: 112
+          readingsCount: 2
+          lastUpdated: '2026-07-27T23:44:10.512Z'
+          readings:
+          - ts: '2026-07-27T23:43:10.123Z'
+            value: 76
+          - ts: '2026-07-27T23:44:10.512Z'
+            value: 77
+        spo2:
+          current: 97
+          average: 96
+          readingsCount: 1
+          lastUpdated: '2026-07-27T23:44:10.512Z'
+          readings:
+          - ts: '2026-07-27T23:44:10.512Z'
+            value: 97
+        temperature:
+          current: 36.7
+          average: 36.5
+          raw: 36.72
+          readingsCount: 1
+          lastUpdated: '2026-07-27T23:44:10.512Z'
+          readings:
+          - ts: '2026-07-27T23:44:10.512Z'
+            value: 36.7
+            raw: 36.72
+        stress:
+          current: 30
+          average: 34
+          readingsCount: 1
+          lastUpdated: '2026-07-27T23:44:10.512Z'
+          readings:
+          - ts: '2026-07-27T23:44:10.512Z'
+            value: 30
+        activity:
+          steps: 717
+          calories: 28390.0
+          distance: 493
+          activeTime: 29
+          lastUpdated: '2026-07-27T23:44:10.512Z'
+          readings:
+          - ts: '2026-07-27T08:00:00.000Z'
+            steps: 120
+            calories: 8
+            distance: 95
+            activeTime: 15
+        sleep:
+          totalMinutes: 431
+          deepMinutes: 92
+          lightMinutes: 268
+          remMinutes: 61
+          awakeMinutes: 10
+          score: 78
+          sleepStart: '2026-07-26T22:41:00.000Z'
+          sleepEnd: '2026-07-27T05:52:00.000Z'
+          lastUpdated: '2026-07-27T23:44:10.512Z'
+          stageData:
+          - 2
+          - 2
+          - 3
+          - 3
+          - 1
+          - 1
+          - 1
+          - 2
+          - 4
+          segments:
+          - start: '2026-07-26T22:41:00.000Z'
+            end: '2026-07-26T23:11:00.000Z'
+            stage: light
+        bloodPressure:
+          systolic: 118
+          diastolic: 76
+          heartRate: 72
+          measurementTime: '2026-07-27T07:12:00.000Z'
+          lastUpdated: '2026-07-27T23:44:10.512Z'
+          readings:
+          - ts: '2026-07-27T07:12:00.000Z'
+            systolic: 118
+            diastolic: 76
+            heartRate: 72
+        totalActivities:
+        - kind: steps
+          value: 717.0
+          target: 4000.0
+        - kind: calories
+          value: 28.39
+          target: 500.0
+        - kind: distance
+          value: 0.493
+          target: 4.0
+    WearableSyncUpsertCounters:
+      type: object
+      required:
+      - snapshot
+      - health_metrics
+      - daily_activity
+      - sleep_summary
+      - total_activities
+      properties:
+        snapshot:
+          type: integer
+          example: 1
+        health_metrics:
+          type: integer
+          example: 6
+        daily_activity:
+          type: integer
+          example: 1
+        sleep_summary:
+          type: integer
+          example: 1
+        total_activities:
+          type: integer
+          example: 3
+        steps_15m:
+          type: integer
+          example: 1
+        sleep_segments:
+          type: integer
+          example: 1
+    WearableSyncResponse:
+      type: object
+      required:
+      - status
+      - device_id
+      - device_uid
+      - sync_date
+      - upserted
+      properties:
+        status:
+          type: string
+          example: synced
+        device_id:
+          type: string
+          example: 66a000000000000000000001
+        device_uid:
+          type: string
+          example: qring-aa-bb-cc-01
+        sync_date:
+          type: string
+          format: date
+          example: '2026-07-27'
+        upserted:
+          $ref: '#/components/schemas/WearableSyncUpsertCounters'
+      example:
+        status: synced
+        device_id: 66a000000000000000000001
+        device_uid: qring-aa-bb-cc-01
+        sync_date: '2026-07-27'
+        upserted:
+          snapshot: 1
+          health_metrics: 14
+          daily_activity: 1
+          steps_15m: 1
+          sleep_summary: 1
+          sleep_segments: 1
+          total_activities: 3
+    WearableRangeItem:
+      type: object
+      required:
+      - date
+      - deviceUid
+      - hrv
+      - heartRate
+      - spo2
+      - temperature
+      - stress
+      - activity
+      - sleep
+      - bloodPressure
+      - totalActivities
+      properties:
+        date:
+          type: string
+          format: date
+          example: '2026-07-27'
+        deviceUid:
+          type: string
+          example: qring-aa-bb-cc-01
+        hrv:
+          $ref: '#/components/schemas/WearableMetricSection'
+        heartRate:
+          $ref: '#/components/schemas/WearableMetricSection'
+        spo2:
+          $ref: '#/components/schemas/WearableMetricSection'
+        temperature:
+          $ref: '#/components/schemas/WearableMetricSection'
+        stress:
+          $ref: '#/components/schemas/WearableMetricSection'
+        activity:
+          $ref: '#/components/schemas/WearableActivitySection'
+        sleep:
+          $ref: '#/components/schemas/WearableSleepSection'
+        bloodPressure:
+          $ref: '#/components/schemas/WearableBloodPressureSection'
+        totalActivities:
+          type: array
+          items:
+            $ref: '#/components/schemas/WearableTotalActivity'
+        tzOffsetMin:
+          type: integer
+          nullable: true
+          example: 420
+      example:
+        date: '2026-07-27'
+        deviceUid: qring-aa-bb-cc-01
+        tzOffsetMin: 420
+        hrv:
+          current: 42
+          average: 45
+          readingsCount: 2
+          lastUpdated: '2026-07-27T23:44:10.512Z'
+        heartRate:
+          current: 77
+          average: 74
+          min: 58
+          max: 112
+          readingsCount: 2
+          lastUpdated: '2026-07-27T23:44:10.512Z'
+        spo2:
+          current: 97
+          average: 96
+          readingsCount: 1
+          lastUpdated: '2026-07-27T23:44:10.512Z'
+        temperature:
+          current: 36.7
+          average: 36.5
+          raw: 36.72
+          readingsCount: 1
+          lastUpdated: '2026-07-27T23:44:10.512Z'
+        stress:
+          current: 30
+          average: 34
+          readingsCount: 1
+          lastUpdated: '2026-07-27T23:44:10.512Z'
+        activity:
+          steps: 717
+          calories: 28390.0
+          distance: 493
+          activeTime: 29
+          lastUpdated: '2026-07-27T23:44:10.512Z'
+        sleep:
+          totalMinutes: 431
+          deepMinutes: 92
+          lightMinutes: 268
+          remMinutes: 61
+          awakeMinutes: 10
+          score: 78
+          sleepStart: '2026-07-26T22:41:00.000Z'
+          sleepEnd: '2026-07-27T05:52:00.000Z'
+          lastUpdated: '2026-07-27T23:44:10.512Z'
+          stageData:
+          - 2
+          - 2
+          - 3
+          - 3
+          - 1
+          - 1
+          - 1
+          - 2
+          - 4
+        bloodPressure:
+          systolic: 118
+          diastolic: 76
+          heartRate: 72
+          measurementTime: '2026-07-27T07:12:00.000Z'
+          lastUpdated: '2026-07-27T23:44:10.512Z'
+        totalActivities:
+        - kind: steps
+          value: 717.0
+          target: 4000.0
+        - kind: calories
+          value: 28.39
+          target: 500.0
+        - kind: distance
+          value: 0.493
+          target: 4.0
+    WearableRangeResponse:
+      type: object
+      required:
+      - deviceUid
+      - from
+      - to
+      - items
+      properties:
+        deviceUid:
+          type: string
+          example: qring-aa-bb-cc-01
+        from:
+          type: string
+          format: date
+          example: '2026-07-01'
+        to:
+          type: string
+          format: date
+          example: '2026-07-27'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WearableRangeItem'
+      example:
+        deviceUid: qring-aa-bb-cc-01
+        from: '2026-07-01'
+        to: '2026-07-27'
+        items:
+        - date: '2026-07-27'
+          deviceUid: qring-aa-bb-cc-01
+          tzOffsetMin: 420
+          hrv:
+            current: 42
+            average: 45
+            readingsCount: 2
+            lastUpdated: '2026-07-27T23:44:10.512Z'
+          heartRate:
+            current: 77
+            average: 74
+            min: 58
+            max: 112
+            readingsCount: 2
+            lastUpdated: '2026-07-27T23:44:10.512Z'
+          spo2:
+            current: 97
+            average: 96
+            readingsCount: 1
+            lastUpdated: '2026-07-27T23:44:10.512Z'
+          temperature:
+            current: 36.7
+            average: 36.5
+            raw: 36.72
+            readingsCount: 1
+            lastUpdated: '2026-07-27T23:44:10.512Z'
+          stress:
+            current: 30
+            average: 34
+            readingsCount: 1
+            lastUpdated: '2026-07-27T23:44:10.512Z'
+          activity:
+            steps: 717
+            calories: 28390.0
+            distance: 493
+            activeTime: 29
+            lastUpdated: '2026-07-27T23:44:10.512Z'
+          sleep:
+            totalMinutes: 431
+            deepMinutes: 92
+            lightMinutes: 268
+            remMinutes: 61
+            awakeMinutes: 10
+            score: 78
+            sleepStart: '2026-07-26T22:41:00.000Z'
+            sleepEnd: '2026-07-27T05:52:00.000Z'
+            lastUpdated: '2026-07-27T23:44:10.512Z'
+            stageData:
+            - 2
+            - 2
+            - 3
+            - 3
+            - 1
+            - 1
+            - 1
+            - 2
+            - 4
+          bloodPressure:
+            systolic: 118
+            diastolic: 76
+            heartRate: 72
+            measurementTime: '2026-07-27T07:12:00.000Z'
+            lastUpdated: '2026-07-27T23:44:10.512Z'
+          totalActivities:
+          - kind: steps
+            value: 717.0
+            target: 4000.0
+          - kind: calories
+            value: 28.39
+            target: 500.0
+          - kind: distance
+            value: 0.493
+            target: 4.0
+    UserWearableRangeResponse:
+      type: object
+      required:
+      - user_id
+      - from
+      - to
+      - devices
+      properties:
+        user_id:
+          type: string
+          example: 66a000000000000000000100
+        from:
+          type: string
+          format: date
+          example: '2026-07-01'
+        to:
+          type: string
+          format: date
+          example: '2026-07-27'
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserWearableRangeDevice'
+      example:
+        user_id: 66a000000000000000000100
+        from: '2026-07-01'
+        to: '2026-07-27'
+        devices:
+        - user_device_id: 66a000000000000000000200
+          device_id: 66a000000000000000000001
+          deviceUid: qring-aa-bb-cc-01
+          nickname: daily ring
+          is_primary: true
+          paired_at: '2026-07-01T00:00:00Z'
+          items:
+          - date: '2026-07-27'
+            deviceUid: qring-aa-bb-cc-01
+            hrv:
+              current: 42
+            totalActivities: []
+    UserWearableRangeDevice:
+      type: object
+      required:
+      - user_device_id
+      - device_id
+      - deviceUid
+      - is_primary
+      - paired_at
+      - items
+      properties:
+        user_device_id:
+          type: string
+          example: 66a000000000000000000200
+        device_id:
+          type: string
+          example: 66a000000000000000000001
+        deviceUid:
+          type: string
+          example: qring-aa-bb-cc-01
+        nickname:
+          type: string
+          nullable: true
+          example: daily ring
+        is_primary:
+          type: boolean
+          example: true
+        paired_at:
+          type: string
+          format: date-time
+          example: '2026-07-01T00:00:00Z'
+        unpaired_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-07-28T00:00:00Z'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WearableRangeItem'
+    WearableMetricReading:
+      type: object
+      properties:
+        ts:
+          type: string
+          format: date-time
+          example: '2026-07-27T23:44:10.512Z'
+        value:
+          type: number
+          format: double
+          example: 77
+        raw:
+          type: number
+          format: double
+          example: 36.72
+      additionalProperties: true
+    WearableActivityReading:
+      type: object
+      properties:
+        ts:
+          type: string
+          format: date-time
+          example: '2026-07-27T08:00:00.000Z'
+        steps:
+          type: number
+          format: double
+          example: 120
+        calories:
+          type: number
+          format: double
+          example: 8
+        distance:
+          type: number
+          format: double
+          example: 95
+        activeTime:
+          type: number
+          format: double
+          description: Active minutes.
+          example: 15
+      additionalProperties: true
+    WearableSleepSegment:
+      type: object
+      properties:
+        start:
+          type: string
+          format: date-time
+          example: '2026-07-26T22:41:00.000Z'
+        end:
+          type: string
+          format: date-time
+          example: '2026-07-26T23:11:00.000Z'
+        stage:
+          type: string
+          example: light
+      additionalProperties: true
+    WearableBloodPressureReading:
+      type: object
+      properties:
+        ts:
+          type: string
+          format: date-time
+          example: '2026-07-27T07:12:00.000Z'
+        systolic:
+          type: number
+          format: double
+          example: 118
+        diastolic:
+          type: number
+          format: double
+          example: 76
+        heartRate:
+          type: number
+          format: double
+          example: 72
+      additionalProperties: true

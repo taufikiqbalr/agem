@@ -1,0 +1,424 @@
+####
+# test
+# ini di drone 
+kind: pipeline
+type: docker
+name: test-agem
+
+trigger:
+  branch: 
+    - tstable
+      # - main
+  event:
+    include:
+      - push
+
+steps:
+  - name: test-test-agem
+    image: hub.regene.xyz/dockerhub_proxy/library/docker
+    network_mode: host
+    environment:
+      SISTEM: test
+      SRV_ENV: test
+    commands:
+      # Bersihkan HuggingFace Cache
+      - echo "TEST"
+
+      # - echo "PYTEST"
+      # - pytest -v
+      # - echo "NSLOOKUP "; nslookup  dagem.regene.xyz
+
+  - name: deploy-test-agem 
+    network_mode: host
+    image: hub.regene.xyz/dockerhub_proxy/library/docker
+    environment:
+          DOCKERUSER:
+            from_secret: docker_username
+          DOCKERPASSWD:
+            from_secret: docker_password
+          PEM_DIR:
+            from_secret: pem_dir
+
+          APP: agem-test
+
+          PUBLISHED_PORT: "6017"
+          TARGET_PORT: "6017"
+
+          SISTEM: test
+          SERVICE: test-agem
+ 
+    commands:
+        # - login
+        - docker login -u $DOCKERUSER -p $DOCKERPASSWD hub.regene.xyz
+        # build 
+        - docker compose build $APP
+        # register 
+        - docker tag $APP hub.regene.xyz/regene/$APP
+        # push
+        - docker push hub.regene.xyz/regene/$APP
+        # check klo web sudah generate, makaupdate force
+        - |
+          MOUNT_ARGS=""
+          if [ -n "$PEM_DIR" ]; then
+            MOUNT_ARGS="--mount type=bind,source=$PEM_DIR,target=$PEM_DIR,readonly"
+          fi
+          if [ -z "$(docker service ls -f name=$SERVICE -q)" ]; then
+            docker service create --publish mode=host,target=$TARGET_PORT,published=$PUBLISHED_PORT $MOUNT_ARGS --constraint node.labels.test==true --env SRV_ENV=test --env ADDR=:$TARGET_PORT --env MONGODB_SECRET_PATH=/run/secrets/mandor_agem_t --env NASABAH_REGENE=/run/secrets/nasabah_regene_t --secret=jwt_user_t --secret=mandor_agem_t --secret=nasabah_regene_t --with-registry-auth --name $SERVICE hub.regene.xyz/regene/$APP:latest
+          else
+            set -- docker service update --detach=true
+            if [ -n "$PEM_DIR" ] && ! docker service inspect "$SERVICE" --format '{{range .Spec.TaskTemplate.ContainerSpec.Mounts}}{{println .Target}}{{end}}' | grep -qx "$PEM_DIR"; then
+              set -- "$@" --mount-add "type=bind,source=$PEM_DIR,target=$PEM_DIR,readonly"
+            fi
+            CURRENT_PORTS="$(docker service inspect "$SERVICE" --format '{{range .Endpoint.Ports}}{{printf "%v:%v\n" .PublishedPort .TargetPort}}{{end}}')"
+            for PORT_SPEC in $CURRENT_PORTS; do
+              PUBLISHED="${PORT_SPEC%%:*}"
+              TARGET="${PORT_SPEC#*:}"
+              case "$PUBLISHED" in
+                ''|*[!0-9]*) continue ;;
+              esac
+              if [ "$PUBLISHED" != "$PUBLISHED_PORT" ] || [ "$TARGET" != "$TARGET_PORT" ]; then
+                set -- "$@" --publish-rm "$PUBLISHED"
+              fi
+            done
+            if ! printf '%s\n' "$CURRENT_PORTS" | grep -qx "$PUBLISHED_PORT:$TARGET_PORT"; then
+              set -- "$@" --publish-add "mode=host,target=$TARGET_PORT,published=$PUBLISHED_PORT"
+            fi
+            SERVICE_SECRETS="$(docker service inspect "$SERVICE" --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{println .SecretName}}{{end}}')"
+            if ! printf '%s\n' "$SERVICE_SECRETS" | grep -qx "mandor_agem_t"; then
+              set -- "$@" --secret-add "source=mandor_agem_t,target=mandor_agem_t"
+            fi
+            if ! printf '%s\n' "$SERVICE_SECRETS" | grep -qx "nasabah_regene_t"; then
+              set -- "$@" --secret-add "source=nasabah_regene_t,target=nasabah_regene_t"
+            fi
+            set -- "$@" --env-add "ADDR=:$TARGET_PORT" --env-add "MONGODB_SECRET_PATH=/run/secrets/mandor_agem_t" --env-add "NASABAH_REGENE=/run/secrets/nasabah_regene_t" --with-registry-auth --image "hub.regene.xyz/regene/$APP:latest" --force "$SERVICE"
+            "$@"
+          fi
+
+
+        - docker system prune --all --volumes -f || echo "docker prune skipped"
+    volumes:
+        - name: sock
+          path: /var/run/docker.sock
+
+volumes:
+    - name: sock
+      host:
+        path: /var/run/docker.sock
+
+image_pull_secrets:
+- dockerconfigjson
+ 
+---
+
+####
+# stable
+# ini di drone
+kind: pipeline
+type: docker
+name: stable-agem
+
+trigger:
+    branch: 
+        - stable
+        # - main
+    event:
+        include:
+            - push
+
+steps:
+  - name: test-stable-agem
+    image: hub.regene.xyz/dockerhub_proxy/library/docker
+    network_mode: host
+    environment:
+      SISTEM: dev
+      SRV_ENV: dev
+    commands:
+      # Bersihkan HuggingFace Cache
+      - echo "TEST"
+
+      # - echo "PYTEST"
+      # - pytest -v
+      # - echo "NSLOOKUP "; nslookup  dagem.regene.xyz
+
+  - name: deploy-stable-agem 
+    network_mode: host
+    image: hub.regene.xyz/dockerhub_proxy/library/docker
+    environment:
+          DOCKERUSER:
+            from_secret: docker_username
+          DOCKERPASSWD:
+            from_secret: docker_password
+          PEM_DIR:
+            from_secret: pem_dir
+
+          APP: agem-stable
+
+          PUBLISHED_PORT: "36017"
+          TARGET_PORT: "36017"
+
+          SISTEM: dev
+          SERVICE: stable-agem
+ 
+    commands:
+        # - login
+        - docker login -u $DOCKERUSER -p $DOCKERPASSWD hub.regene.xyz
+        # build 
+        - docker compose build $APP
+        # register 
+        - docker tag $APP hub.regene.xyz/regene/$APP
+        # push
+        - docker push hub.regene.xyz/regene/$APP
+        # check klo web sudah generate, makaupdate force
+        - |
+          MOUNT_ARGS=""
+          if [ -n "$PEM_DIR" ]; then
+            MOUNT_ARGS="--mount type=bind,source=$PEM_DIR,target=$PEM_DIR,readonly"
+          fi
+          if [ -z "$(docker service ls -f name=$SERVICE -q)" ]; then
+            docker service create --publish mode=host,target=$TARGET_PORT,published=$PUBLISHED_PORT $MOUNT_ARGS --constraint node.labels.dev==true --env SRV_ENV=dev --env ADDR=:$TARGET_PORT --env MONGODB_SECRET_PATH=/run/secrets/mandor_agem_d --env NASABAH_REGENE=/run/secrets/nasabah_regene_d --secret=jwt_user_d --secret=mandor_agem_d --secret=nasabah_regene_d --with-registry-auth --name $SERVICE hub.regene.xyz/regene/$APP:latest
+          else
+            set -- docker service update --detach=true
+            if [ -n "$PEM_DIR" ] && ! docker service inspect "$SERVICE" --format '{{range .Spec.TaskTemplate.ContainerSpec.Mounts}}{{println .Target}}{{end}}' | grep -qx "$PEM_DIR"; then
+              set -- "$@" --mount-add "type=bind,source=$PEM_DIR,target=$PEM_DIR,readonly"
+            fi
+            CURRENT_PORTS="$(docker service inspect "$SERVICE" --format '{{range .Endpoint.Ports}}{{printf "%v:%v\n" .PublishedPort .TargetPort}}{{end}}')"
+            for PORT_SPEC in $CURRENT_PORTS; do
+              PUBLISHED="${PORT_SPEC%%:*}"
+              TARGET="${PORT_SPEC#*:}"
+              case "$PUBLISHED" in
+                ''|*[!0-9]*) continue ;;
+              esac
+              if [ "$PUBLISHED" != "$PUBLISHED_PORT" ] || [ "$TARGET" != "$TARGET_PORT" ]; then
+                set -- "$@" --publish-rm "$PUBLISHED"
+              fi
+            done
+            if ! printf '%s\n' "$CURRENT_PORTS" | grep -qx "$PUBLISHED_PORT:$TARGET_PORT"; then
+              set -- "$@" --publish-add "mode=host,target=$TARGET_PORT,published=$PUBLISHED_PORT"
+            fi
+            SERVICE_SECRETS="$(docker service inspect "$SERVICE" --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{println .SecretName}}{{end}}')"
+            if ! printf '%s\n' "$SERVICE_SECRETS" | grep -qx "mandor_agem_d"; then
+              set -- "$@" --secret-add "source=mandor_agem_d,target=mandor_agem_d"
+            fi
+            if ! printf '%s\n' "$SERVICE_SECRETS" | grep -qx "nasabah_regene_d"; then
+              set -- "$@" --secret-add "source=nasabah_regene_d,target=nasabah_regene_d"
+            fi
+            set -- "$@" --env-add "ADDR=:$TARGET_PORT" --env-add "MONGODB_SECRET_PATH=/run/secrets/mandor_agem_d" --env-add "NASABAH_REGENE=/run/secrets/nasabah_regene_d" --with-registry-auth --image "hub.regene.xyz/regene/$APP:latest" --force "$SERVICE"
+            "$@"
+          fi
+
+        - docker system prune --all --volumes -f || echo "docker prune skipped"
+    volumes:
+        - name: sock
+          path: /var/run/docker.sock
+
+volumes:
+    - name: sock
+      host:
+        path: /var/run/docker.sock
+
+image_pull_secrets:
+- dockerconfigjson
+
+---
+
+####
+# staging
+# ini di drone
+kind: pipeline
+type: docker
+name: staging-agem
+
+trigger:
+    branch: 
+        - staging
+    event:
+        include:
+            - push
+
+steps:
+  - name: test-staging-agem
+    image: hub.regene.xyz/dockerhub_proxy/library/docker
+    network_mode: host
+    environment:
+      SISTEM: staging
+      SRV_ENV: staging
+    commands:
+      # Bersihkan HuggingFace Cache
+      - echo "TEST"
+
+      # - echo "PYTEST"
+      # - pytest -v
+      # - echo "NSLOOKUP "; nslookup  dagem.regene.xyz
+
+  - name: deploy-staging-agem 
+    network_mode: host
+    image: hub.regene.xyz/dockerhub_proxy/library/docker
+    environment:
+          DOCKERUSER:
+            from_secret: docker_username
+          DOCKERPASSWD:
+            from_secret: docker_password
+          PEM_DIR:
+            from_secret: pem_dir
+
+          APP: agem-staging
+
+          PUBLISHED_PORT: "26017"
+          TARGET_PORT: "26017"
+
+          SISTEM: staging
+          SERVICE: staging-agem
+ 
+    commands:
+        # - login
+        - docker login -u $DOCKERUSER -p $DOCKERPASSWD hub.regene.xyz
+        # build 
+        - docker compose build $APP
+        # register 
+        - docker tag $APP hub.regene.xyz/regene/$APP
+        # push
+        - docker push hub.regene.xyz/regene/$APP
+        # check klo web sudah generate, makaupdate force
+        - |
+          MOUNT_ARGS=""
+          if [ -n "$PEM_DIR" ]; then
+            MOUNT_ARGS="--mount type=bind,source=$PEM_DIR,target=$PEM_DIR,readonly"
+          fi
+          if [ -z "$(docker service ls -f name=$SERVICE -q)" ]; then
+            docker service create --publish mode=host,target=$TARGET_PORT,published=$PUBLISHED_PORT $MOUNT_ARGS --constraint node.labels.staging==true --env SRV_ENV=staging --env ADDR=:$TARGET_PORT --env MONGODB_SECRET_PATH=/run/secrets/mandor_agem_s --env NASABAH_REGENE=/run/secrets/nasabah_regene_s --secret=jwt_user_s --secret=mandor_agem_s --secret=nasabah_regene_s --with-registry-auth --name $SERVICE hub.regene.xyz/regene/$APP:latest
+          else
+            set -- docker service update --detach=true
+            if [ -n "$PEM_DIR" ] && ! docker service inspect "$SERVICE" --format '{{range .Spec.TaskTemplate.ContainerSpec.Mounts}}{{println .Target}}{{end}}' | grep -qx "$PEM_DIR"; then
+              set -- "$@" --mount-add "type=bind,source=$PEM_DIR,target=$PEM_DIR,readonly"
+            fi
+            CURRENT_PORTS="$(docker service inspect "$SERVICE" --format '{{range .Endpoint.Ports}}{{printf "%v:%v\n" .PublishedPort .TargetPort}}{{end}}')"
+            for PORT_SPEC in $CURRENT_PORTS; do
+              PUBLISHED="${PORT_SPEC%%:*}"
+              TARGET="${PORT_SPEC#*:}"
+              case "$PUBLISHED" in
+                ''|*[!0-9]*) continue ;;
+              esac
+              if [ "$PUBLISHED" != "$PUBLISHED_PORT" ] || [ "$TARGET" != "$TARGET_PORT" ]; then
+                set -- "$@" --publish-rm "$PUBLISHED"
+              fi
+            done
+            if ! printf '%s\n' "$CURRENT_PORTS" | grep -qx "$PUBLISHED_PORT:$TARGET_PORT"; then
+              set -- "$@" --publish-add "mode=host,target=$TARGET_PORT,published=$PUBLISHED_PORT"
+            fi
+            SERVICE_SECRETS="$(docker service inspect "$SERVICE" --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{println .SecretName}}{{end}}')"
+            if ! printf '%s\n' "$SERVICE_SECRETS" | grep -qx "mandor_agem_s"; then
+              set -- "$@" --secret-add "source=mandor_agem_s,target=mandor_agem_s"
+            fi
+            if ! printf '%s\n' "$SERVICE_SECRETS" | grep -qx "nasabah_regene_s"; then
+              set -- "$@" --secret-add "source=nasabah_regene_s,target=nasabah_regene_s"
+            fi
+            set -- "$@" --env-add "ADDR=:$TARGET_PORT" --env-add "MONGODB_SECRET_PATH=/run/secrets/mandor_agem_s" --env-add "NASABAH_REGENE=/run/secrets/nasabah_regene_s" --with-registry-auth --image "hub.regene.xyz/regene/$APP:latest" --force "$SERVICE"
+            "$@"
+          fi
+
+        - docker system prune --all --volumes -f || echo "docker prune skipped"
+    volumes:
+        - name: sock
+          path: /var/run/docker.sock
+
+volumes:
+    - name: sock
+      host:
+        path: /var/run/docker.sock
+
+image_pull_secrets:
+- dockerconfigjson
+
+---
+# prod
+# ini di drone
+kind: pipeline
+type: docker
+name: prod-agem
+
+trigger:
+    branch: 
+        - main
+    event:
+        include:
+            - push
+
+# depends_on:
+    # - stable-agem
+
+steps:
+  - name: test-prod-agem
+    image: hub.regene.xyz/dockerhub_proxy/library/docker
+    network_mode: host
+    environment:
+      SISTEM: prod
+      SRV_ENV: prod
+      HF_HOME: /tmp/huggingface_cache
+    commands:
+      # Bersihkan HuggingFace Cache
+      - echo "TEST"
+
+      # - echo "PYTEST"
+      # - pytest -v
+      # - echo "NSLOOKUP "; nslookup  dagem.regene.xyz
+
+        
+  - name: deploy-prod-agem
+    image: hub.regene.xyz/dockerhub_proxy/library/docker
+    environment:
+          DOCKERUSER:
+            from_secret: docker_username
+          DOCKERPASSWD:
+            from_secret: docker_password
+
+          APP: agem-prod
+
+          PUBLISHED_PORT: "16017"
+          TARGET_PORT: "16017"
+
+          SISTEM: prod
+          SERVICE: prod-agem
+    commands:
+        # - login
+        - docker login -u $DOCKERUSER -p $DOCKERPASSWD hub.regene.xyz
+        # build 
+        - docker compose build $APP
+        # register
+        - docker tag $APP hub.regene.xyz/regene-prod/$APP
+        # push
+        - docker push hub.regene.xyz/regene-prod/$APP
+        # check klo web sudah generate, makaupdate force
+        - |
+          if [ -z "$(docker service ls -f name=$SERVICE -q)" ]; then
+            docker service create --publish mode=host,target=$TARGET_PORT,published=$PUBLISHED_PORT --constraint node.labels.prodai==true --env SRV_ENV=prod --env ADDR=:$TARGET_PORT --secret=agem_kepo_p --secret=mas_agem_p --secret=mandor_report_p --secret=nasabah_report_p --secret=jwt_admin_p --secret=jwt_user_p --secret=jwt_p --with-registry-auth --name $SERVICE hub.regene.xyz/regene-prod/$APP:latest
+          else
+            set -- docker service update --detach=true
+            CURRENT_PORTS="$(docker service inspect "$SERVICE" --format '{{range .Endpoint.Ports}}{{printf "%v:%v\n" .PublishedPort .TargetPort}}{{end}}')"
+            for PORT_SPEC in $CURRENT_PORTS; do
+              PUBLISHED="${PORT_SPEC%%:*}"
+              TARGET="${PORT_SPEC#*:}"
+              case "$PUBLISHED" in
+                ''|*[!0-9]*) continue ;;
+              esac
+              if [ "$PUBLISHED" != "$PUBLISHED_PORT" ] || [ "$TARGET" != "$TARGET_PORT" ]; then
+                set -- "$@" --publish-rm "$PUBLISHED"
+              fi
+            done
+            if ! printf '%s\n' "$CURRENT_PORTS" | grep -qx "$PUBLISHED_PORT:$TARGET_PORT"; then
+              set -- "$@" --publish-add "mode=host,target=$TARGET_PORT,published=$PUBLISHED_PORT"
+            fi
+            set -- "$@" --env-add "ADDR=:$TARGET_PORT" --with-registry-auth --image "hub.regene.xyz/regene-prod/$APP:latest" --force "$SERVICE"
+            "$@"
+          fi
+        - docker system prune --all --volumes -f || echo "docker prune skipped"
+    volumes:
+        - name: sock
+          path: /var/run/docker.sock
+
+volumes:
+    - name: sock
+      host:
+        path: /var/run/docker.sock
+
+image_pull_secrets:
+- dockerconfigjson

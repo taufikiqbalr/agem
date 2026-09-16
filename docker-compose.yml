@@ -1,0 +1,102 @@
+services:
+
+  agem-test:
+    build:
+      context: .
+      dockerfile: Dockerfile-t
+      args:
+        APP_PORT: 6017
+    network_mode: "host"
+    image: agem-test
+    secrets:
+      - mandor_agem_t
+      - nasabah_regene_t
+    environment:
+      - ADDR=:6017
+      - MONGODB_SECRET_PATH=/run/secrets/mandor_agem_t
+      - NASABAH_REGENE=/run/secrets/nasabah_regene_t
+    ports:
+      - target: 6017
+        published: 6017
+        mode: host
+    volumes:
+      - .:/app:ro
+      - /etc/gembok:/etc/gembok:ro
+
+  agem-stable:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_PORT: 36017
+    network_mode: "host"
+    image: agem-stable
+    secrets:
+      - mandor_agem_d
+      - nasabah_regene_d
+    environment:
+      - ADDR=:36017
+      - MONGODB_SECRET_PATH=/run/secrets/mandor_agem_d
+      - NASABAH_REGENE=/run/secrets/nasabah_regene_d
+    ports:
+      - target: 36017
+        published: 36017
+        mode: host
+    volumes:
+      - .:/app:ro
+      - /etc/gembok:/etc/gembok:ro
+
+  agem-staging:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_PORT: 26017
+    network_mode: "host"
+    image: agem-staging
+    secrets:
+      - mandor_agem_s
+      - nasabah_regene_s
+    environment:
+      - ADDR=:26017
+      - MONGODB_SECRET_PATH=/run/secrets/mandor_agem_s
+      - NASABAH_REGENE=/run/secrets/nasabah_regene_s
+    ports:
+      - target: 26017
+        published: 26017
+        mode: host
+    volumes:
+      - .:/app:ro
+      - /etc/gembok:/etc/gembok:ro
+
+  agem-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_PORT: 16017
+    network_mode: "host"
+    image: agem-prod
+    environment:
+      - ADDR=:16017
+    ports:
+      - target: 16017
+        published: 16017
+        mode: host
+    volumes:
+      - .:/app:ro
+
+
+secrets:
+  mandor_agem_t:
+    external: true
+  mandor_agem_d:
+    external: true
+  mandor_agem_s:
+    external: true
+  nasabah_regene_t:
+    external: true
+  nasabah_regene_d:
+    external: true
+  nasabah_regene_s:
+    external: true

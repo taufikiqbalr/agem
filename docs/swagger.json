@@ -1,0 +1,3073 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "Backend API for AGEM wearable users, devices, qring sensor data, sleep, and workouts.",
+        "title": "AGEM Backend API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "basePath": "/",
+    "paths": {
+        "/healthz": {
+            "get": {
+                "description": "Returns service health status.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Health"
+                ],
+                "summary": "Health check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/devices/": {
+            "post": {
+                "description": "Creates a wearable device registry record.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Devices"
+                ],
+                "summary": "Create device",
+                "parameters": [
+                    {
+                        "description": "Device payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CreateDeviceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/store.DeviceRow"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/devices/by_uid/{device_uid}": {
+            "get": {
+                "description": "Returns one device by stable wearable UID or MAC address.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Devices"
+                ],
+                "summary": "Get device by UID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Stable wearable UID",
+                        "name": "device_uid",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.DeviceRow"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/devices/{device_id}/activity/daily": {
+            "get": {
+                "description": "Lists device-local daily activity summaries in an inclusive date range.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Daily Activity"
+                ],
+                "summary": "List daily activity",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Inclusive device-local start date",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Inclusive device-local end date",
+                        "name": "to",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.DailyActivityResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Creates or updates one device-local daily activity summary for a device.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Daily Activity"
+                ],
+                "summary": "Upsert daily activity",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Daily activity payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.DailyActivityRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.DailyActivityResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/devices/{device_id}/events": {
+            "get": {
+                "description": "Lists device events in an RFC3339 time range, optionally filtered by event type.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Device Events"
+                ],
+                "summary": "List device events",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Event type filter",
+                        "name": "event_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Inclusive RFC3339 start timestamp",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Exclusive RFC3339 end timestamp",
+                        "name": "to",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.DeviceEventResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Idempotently ingests device events such as sync markers, battery state, binding events, or SDK notifications.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Device Events"
+                ],
+                "summary": "Ingest device events",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Device event payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.IngestDeviceEventsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpsertResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/devices/{device_id}/health/metrics": {
+            "get": {
+                "description": "Lists health metric points in an RFC3339 time range, optionally filtered by metric name.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Health Metrics"
+                ],
+                "summary": "List health metrics",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Metric name filter",
+                        "name": "metric",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Inclusive RFC3339 start timestamp",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Exclusive RFC3339 end timestamp",
+                        "name": "to",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.HealthMetricResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Idempotently ingests qring health metric points such as heart rate, SpO2, stress, HRV, and temperature.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Health Metrics"
+                ],
+                "summary": "Ingest health metrics",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Health metric points",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.IngestHealthMetricsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpsertResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/devices/{device_id}/sleep/segments": {
+            "get": {
+                "description": "Lists sleep stage segments by device-local sleep date.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sleep"
+                ],
+                "summary": "List sleep segments",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Device-local sleep date",
+                        "name": "date",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.SleepSegmentResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Idempotently ingests sleep stage segments for a device.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sleep"
+                ],
+                "summary": "Ingest sleep segments",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Sleep segment payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.IngestSleepSegmentsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpsertResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/devices/{device_id}/sleep/summary": {
+            "get": {
+                "description": "Returns a sleep summary by device-local sleep date.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sleep"
+                ],
+                "summary": "Get sleep summary",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Device-local sleep date",
+                        "name": "date",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.SleepSummaryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Creates or updates one device-local sleep summary for a device and sleep date.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sleep"
+                ],
+                "summary": "Upsert sleep summary",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Sleep summary payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SleepSummaryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.SleepSummaryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/devices/{device_id}/steps/daily": {
+            "get": {
+                "description": "Aggregates daily step totals from the steps_15m time series collection.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Steps"
+                ],
+                "summary": "Aggregate daily steps",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Inclusive RFC3339 start timestamp",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Exclusive RFC3339 end timestamp",
+                        "name": "to",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.StepsDailyRow"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/devices/{device_id}/steps15m": {
+            "get": {
+                "description": "Lists 15-minute step points by device-local date.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Steps"
+                ],
+                "summary": "List 15-minute steps",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Device-local date",
+                        "name": "date",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.Steps15mResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Idempotently ingests 15-minute qring step detail points.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Steps"
+                ],
+                "summary": "Ingest 15-minute steps",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Step points",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.IngestSteps15mRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpsertResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/devices/{device_id}/workouts": {
+            "get": {
+                "description": "Lists workouts in an RFC3339 time range.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workouts"
+                ],
+                "summary": "List workouts",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Inclusive RFC3339 start timestamp",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Exclusive RFC3339 end timestamp",
+                        "name": "to",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.WorkoutResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Creates or replaces a workout keyed by device ID and start_utc.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workouts"
+                ],
+                "summary": "Create workout",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Workout payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WorkoutRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/store.WorkoutResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Deletes a workout identified by device ID and start_utc query parameter.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workouts"
+                ],
+                "summary": "Delete workout",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Workout start timestamp",
+                        "name": "start_utc",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.StatusResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "Updates a workout identified by device ID and start_utc in the request body.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workouts"
+                ],
+                "summary": "Update workout",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Workout update payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WorkoutRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.WorkoutResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/devices/{id}": {
+            "get": {
+                "description": "Returns one device by API ID.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Devices"
+                ],
+                "summary": "Get device",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.DeviceRow"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Deletes a device by API ID.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Devices"
+                ],
+                "summary": "Delete device",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.StatusResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "Updates device metadata and last seen timestamp.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Devices"
+                ],
+                "summary": "Update device",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Device update payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateDeviceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.DeviceRow"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/user_devices/{id}": {
+            "delete": {
+                "description": "Deletes a user-device pairing record.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Pairings"
+                ],
+                "summary": "Delete pairing",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Pairing ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.StatusResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "Updates pairing nickname, primary flag, or unpaired time.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Pairings"
+                ],
+                "summary": "Update pairing",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Pairing ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Pairing update payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateUserDeviceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.UserDeviceRow"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/users/": {
+            "post": {
+                "description": "Creates an AGEM user identity record.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Create user",
+                "parameters": [
+                    {
+                        "description": "User payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CreateUserRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/store.UserRow"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/users/{id}": {
+            "get": {
+                "description": "Returns one AGEM user by ID.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Get user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.UserRow"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Deletes a user by ID.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Delete user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.StatusResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "Updates user email or phone.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Update user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "User update payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateUserRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.UserRow"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/users/{user_id}/devices": {
+            "get": {
+                "description": "Lists device pairings for one user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Pairings"
+                ],
+                "summary": "List user devices",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.UserDeviceRow"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Creates a pairing record between a user and a device.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Pairings"
+                ],
+                "summary": "Pair device to user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Pairing payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.PairDeviceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/store.UserDeviceRow"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v3/users/{user_id}/wearable/range": {
+            "get": {
+                "description": "Returns QRing-style daily wearable snapshots grouped by devices paired to the user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Wearable v3"
+                ],
+                "summary": "List user wearable snapshots",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Inclusive start date",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Inclusive end date",
+                        "name": "to",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include raw readings and sleep segments in snapshot payloads",
+                        "name": "include_readings",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.UserWearableRangeResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v3/wearable/range": {
+            "get": {
+                "description": "Returns QRing-style daily wearable snapshots in an inclusive device-local date range.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Wearable v3"
+                ],
+                "summary": "List synced wearable snapshots",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Stable wearable UID",
+                        "name": "device_uid",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Alias for device_uid",
+                        "name": "deviceUid",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Inclusive start date",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Inclusive end date",
+                        "name": "to",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include raw readings and sleep segments in snapshot payloads",
+                        "name": "include_readings",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.WearableRangeResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v3/wearable/sync": {
+            "post": {
+                "description": "Stores a QRing-style daily wearable payload, preserves the snapshot, and fans out recognized sections into MongoDB collections.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Wearable v3"
+                ],
+                "summary": "Sync wearable snapshot",
+                "parameters": [
+                    {
+                        "description": "Wearable sync payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/store.WearableSyncRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.WearableSyncResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httpx.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "handlers.CreateDeviceRequest": {
+            "type": "object",
+            "properties": {
+                "device_uid": {
+                    "description": "remoteId/MAC stable identifier",
+                    "type": "string"
+                },
+                "fw_rev": {
+                    "type": "string"
+                },
+                "hw_rev": {
+                    "type": "string"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "serial_number": {
+                    "type": "string"
+                },
+                "vendor": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.CreateUserRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.DailyActivityRequest": {
+            "type": "object",
+            "properties": {
+                "calories": {
+                    "type": "integer"
+                },
+                "device_date": {
+                    "type": "string"
+                },
+                "running_steps": {
+                    "type": "integer"
+                },
+                "sleep_duration_s": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "sport_duration_s": {
+                    "type": "integer"
+                },
+                "total_steps": {
+                    "type": "integer"
+                },
+                "tz_offset_min": {
+                    "type": "integer"
+                },
+                "walk_distance_m": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.DeviceEventPoint": {
+            "type": "object",
+            "properties": {
+                "event_type": {
+                    "type": "string"
+                },
+                "payload": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "source": {
+                    "type": "string"
+                },
+                "ts_utc": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.HealthMetricPoint": {
+            "type": "object",
+            "properties": {
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "metric": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "ts_utc": {
+                    "type": "string"
+                },
+                "unit": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                },
+                "values": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                }
+            }
+        },
+        "handlers.IngestDeviceEventsRequest": {
+            "type": "object",
+            "properties": {
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.DeviceEventPoint"
+                    }
+                }
+            }
+        },
+        "handlers.IngestHealthMetricsRequest": {
+            "type": "object",
+            "properties": {
+                "points": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.HealthMetricPoint"
+                    }
+                }
+            }
+        },
+        "handlers.IngestSleepSegmentsRequest": {
+            "type": "object",
+            "properties": {
+                "segments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.SleepSegment"
+                    }
+                }
+            }
+        },
+        "handlers.IngestSteps15mRequest": {
+            "type": "object",
+            "properties": {
+                "points": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.Step15mPoint"
+                    }
+                }
+            }
+        },
+        "handlers.PairDeviceRequest": {
+            "type": "object",
+            "properties": {
+                "device_id": {
+                    "type": "string"
+                },
+                "is_primary": {
+                    "type": "boolean"
+                },
+                "nickname": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.SleepSegment": {
+            "type": "object",
+            "properties": {
+                "end_utc": {
+                    "description": "RFC3339",
+                    "type": "string"
+                },
+                "sleep_date": {
+                    "description": "YYYY-MM-DD",
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "stage": {
+                    "description": "deep/light/rem/awake/off_wrist/unknown",
+                    "type": "string"
+                },
+                "start_utc": {
+                    "description": "RFC3339",
+                    "type": "string"
+                },
+                "tz_offset_min": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.SleepSummaryRequest": {
+            "type": "object",
+            "properties": {
+                "awake_s": {
+                    "type": "integer"
+                },
+                "deep_s": {
+                    "type": "integer"
+                },
+                "light_s": {
+                    "type": "integer"
+                },
+                "rem_s": {
+                    "type": "integer"
+                },
+                "sleep_date": {
+                    "description": "YYYY-MM-DD (device-local night)",
+                    "type": "string"
+                },
+                "sleep_start_utc": {
+                    "description": "RFC3339 optional",
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "total_sleep_s": {
+                    "type": "integer"
+                },
+                "tz_offset_min": {
+                    "type": "integer"
+                },
+                "wake_utc": {
+                    "description": "RFC3339 optional",
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.StatusResponse": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "example": "deleted"
+                }
+            }
+        },
+        "handlers.Step15mPoint": {
+            "type": "object",
+            "properties": {
+                "calories": {
+                    "type": "integer"
+                },
+                "device_date": {
+                    "description": "YYYY-MM-DD (device-local)",
+                    "type": "string"
+                },
+                "distance_m": {
+                    "type": "integer"
+                },
+                "run_steps": {
+                    "type": "integer"
+                },
+                "source": {
+                    "description": "device/derived/manual/import (optional)",
+                    "type": "string"
+                },
+                "sport_duration_s": {
+                    "description": "active duration in seconds",
+                    "type": "integer"
+                },
+                "time_index": {
+                    "description": "0..95",
+                    "type": "integer"
+                },
+                "ts_utc": {
+                    "description": "RFC3339",
+                    "type": "string"
+                },
+                "tz_offset_min": {
+                    "type": "integer"
+                },
+                "walk_steps": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.UpdateDeviceRequest": {
+            "type": "object",
+            "properties": {
+                "fw_rev": {
+                    "type": "string"
+                },
+                "hw_rev": {
+                    "type": "string"
+                },
+                "last_seen_at": {
+                    "description": "RFC3339",
+                    "type": "string"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "serial_number": {
+                    "type": "string"
+                },
+                "vendor": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.UpdateUserDeviceRequest": {
+            "type": "object",
+            "properties": {
+                "is_primary": {
+                    "type": "boolean"
+                },
+                "nickname": {
+                    "type": "string"
+                },
+                "unpaired_at": {
+                    "description": "RFC3339 or null",
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.UpdateUserRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.UpsertResponse": {
+            "type": "object",
+            "properties": {
+                "upserted": {
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "handlers.WorkoutRequest": {
+            "type": "object",
+            "properties": {
+                "avg_cadence_spm": {
+                    "type": "integer"
+                },
+                "avg_hr": {
+                    "type": "integer"
+                },
+                "avg_speed_cm_s": {
+                    "type": "integer"
+                },
+                "calories": {
+                    "type": "number"
+                },
+                "distance_m": {
+                    "type": "integer"
+                },
+                "downhill_cm": {
+                    "type": "integer"
+                },
+                "duration_s": {
+                    "type": "integer"
+                },
+                "elevation_cm": {
+                    "type": "integer"
+                },
+                "end_utc": {
+                    "description": "RFC3339 optional",
+                    "type": "string"
+                },
+                "locations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.WorkoutLocation"
+                    }
+                },
+                "max_hr": {
+                    "type": "integer"
+                },
+                "max_speed_cm_s": {
+                    "type": "integer"
+                },
+                "min_hr": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "sport_count": {
+                    "type": "integer"
+                },
+                "sport_type_id": {
+                    "type": "integer"
+                },
+                "start_utc": {
+                    "description": "RFC3339",
+                    "type": "string"
+                },
+                "steps": {
+                    "type": "integer"
+                },
+                "tz_offset_min": {
+                    "type": "integer"
+                },
+                "uphill_cm": {
+                    "type": "integer"
+                }
+            }
+        },
+        "httpx.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.DailyActivityResponse": {
+            "type": "object",
+            "properties": {
+                "calories": {
+                    "type": "integer"
+                },
+                "device_date": {
+                    "type": "string"
+                },
+                "device_id": {
+                    "type": "string"
+                },
+                "running_steps": {
+                    "type": "integer"
+                },
+                "sleep_duration_s": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "sport_duration_s": {
+                    "type": "integer"
+                },
+                "synced_at": {
+                    "type": "string"
+                },
+                "total_steps": {
+                    "type": "integer"
+                },
+                "tz_offset_min": {
+                    "type": "integer"
+                },
+                "walk_distance_m": {
+                    "type": "integer"
+                }
+            }
+        },
+        "store.DeviceEventResponse": {
+            "type": "object",
+            "properties": {
+                "device_id": {
+                    "type": "string"
+                },
+                "event_type": {
+                    "type": "string"
+                },
+                "payload": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "source": {
+                    "type": "string"
+                },
+                "synced_at": {
+                    "type": "string"
+                },
+                "ts_utc": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.DeviceRow": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "device_uid": {
+                    "type": "string"
+                },
+                "first_seen_at": {
+                    "type": "string"
+                },
+                "fw_rev": {
+                    "type": "string"
+                },
+                "hw_rev": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "last_seen_at": {
+                    "type": "string"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "serial_number": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "vendor": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.HealthMetricResponse": {
+            "type": "object",
+            "properties": {
+                "device_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "metric": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "synced_at": {
+                    "type": "string"
+                },
+                "ts_utc": {
+                    "type": "string"
+                },
+                "unit": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                },
+                "values": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                }
+            }
+        },
+        "store.SleepSegmentResponse": {
+            "type": "object",
+            "properties": {
+                "end_utc": {
+                    "type": "string"
+                },
+                "sleep_date": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "stage": {
+                    "type": "string"
+                },
+                "start_utc": {
+                    "type": "string"
+                },
+                "synced_at": {
+                    "type": "string"
+                },
+                "tz_offset_min": {
+                    "type": "integer"
+                }
+            }
+        },
+        "store.SleepSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "awake_s": {
+                    "type": "integer"
+                },
+                "deep_s": {
+                    "type": "integer"
+                },
+                "device_id": {
+                    "type": "string"
+                },
+                "light_s": {
+                    "type": "integer"
+                },
+                "rem_s": {
+                    "type": "integer"
+                },
+                "score": {
+                    "type": "integer"
+                },
+                "sleep_date": {
+                    "type": "string"
+                },
+                "sleep_start_utc": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "stage_data": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "synced_at": {
+                    "type": "string"
+                },
+                "total_sleep_s": {
+                    "type": "integer"
+                },
+                "tz_offset_min": {
+                    "type": "integer"
+                },
+                "wake_utc": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.Steps15mResponse": {
+            "type": "object",
+            "properties": {
+                "calories": {
+                    "type": "integer"
+                },
+                "device_date": {
+                    "type": "string"
+                },
+                "distance_m": {
+                    "type": "integer"
+                },
+                "run_steps": {
+                    "type": "integer"
+                },
+                "sport_duration_s": {
+                    "type": "integer"
+                },
+                "synced_at": {
+                    "type": "string"
+                },
+                "time_index": {
+                    "type": "integer"
+                },
+                "ts_utc": {
+                    "type": "string"
+                },
+                "tz_offset_min": {
+                    "type": "integer"
+                },
+                "walk_steps": {
+                    "type": "integer"
+                }
+            }
+        },
+        "store.StepsDailyRow": {
+            "type": "object",
+            "properties": {
+                "calories": {
+                    "type": "integer"
+                },
+                "day_utc": {
+                    "type": "string"
+                },
+                "distance_m": {
+                    "type": "integer"
+                },
+                "last_synced_at": {
+                    "type": "string"
+                },
+                "running_steps": {
+                    "type": "integer"
+                },
+                "total_steps": {
+                    "type": "integer"
+                }
+            }
+        },
+        "store.UserDeviceRow": {
+            "type": "object",
+            "properties": {
+                "device_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_primary": {
+                    "type": "boolean"
+                },
+                "nickname": {
+                    "type": "string"
+                },
+                "paired_at": {
+                    "type": "string"
+                },
+                "unpaired_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.UserRow": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.UserWearableRangeDevice": {
+            "type": "object",
+            "properties": {
+                "deviceUid": {
+                    "type": "string",
+                    "example": "qring-aa-bb-cc-01"
+                },
+                "device_id": {
+                    "type": "string",
+                    "example": "66a000000000000000000001"
+                },
+                "is_primary": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.WearableRangeItem"
+                    }
+                },
+                "nickname": {
+                    "type": "string",
+                    "example": "daily ring"
+                },
+                "paired_at": {
+                    "type": "string",
+                    "example": "2026-07-01T00:00:00Z"
+                },
+                "unpaired_at": {
+                    "type": "string",
+                    "example": "2026-07-28T00:00:00Z"
+                },
+                "user_device_id": {
+                    "type": "string",
+                    "example": "66a000000000000000000200"
+                }
+            }
+        },
+        "store.UserWearableRangeResponse": {
+            "type": "object",
+            "properties": {
+                "devices": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.UserWearableRangeDevice"
+                    }
+                },
+                "from": {
+                    "type": "string",
+                    "example": "2026-07-01"
+                },
+                "to": {
+                    "type": "string",
+                    "example": "2026-07-27"
+                },
+                "user_id": {
+                    "type": "string",
+                    "example": "66a000000000000000000100"
+                }
+            }
+        },
+        "store.WearableActivityReading": {
+            "type": "object",
+            "properties": {
+                "activeTime": {
+                    "type": "number",
+                    "example": 15
+                },
+                "calories": {
+                    "type": "number",
+                    "example": 8
+                },
+                "distance": {
+                    "type": "number",
+                    "example": 95
+                },
+                "steps": {
+                    "type": "number",
+                    "example": 120
+                },
+                "ts": {
+                    "type": "string",
+                    "example": "2026-07-27T08:00:00.000Z"
+                }
+            }
+        },
+        "store.WearableActivitySection": {
+            "type": "object",
+            "properties": {
+                "activeTime": {
+                    "type": "number",
+                    "example": 29
+                },
+                "calories": {
+                    "type": "number",
+                    "example": 28390
+                },
+                "distance": {
+                    "type": "number",
+                    "example": 493
+                },
+                "lastUpdated": {
+                    "type": "string",
+                    "example": "2026-07-27T23:44:10.512Z"
+                },
+                "readings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.WearableActivityReading"
+                    }
+                },
+                "steps": {
+                    "type": "number",
+                    "example": 717
+                }
+            }
+        },
+        "store.WearableBloodPressureReading": {
+            "type": "object",
+            "properties": {
+                "diastolic": {
+                    "type": "number",
+                    "example": 76
+                },
+                "heartRate": {
+                    "type": "number",
+                    "example": 72
+                },
+                "systolic": {
+                    "type": "number",
+                    "example": 118
+                },
+                "ts": {
+                    "type": "string",
+                    "example": "2026-07-27T07:12:00.000Z"
+                }
+            }
+        },
+        "store.WearableBloodPressureSection": {
+            "type": "object",
+            "properties": {
+                "diastolic": {
+                    "type": "number",
+                    "example": 76
+                },
+                "heartRate": {
+                    "type": "number",
+                    "example": 72
+                },
+                "lastUpdated": {
+                    "type": "string",
+                    "example": "2026-07-27T23:44:10.512Z"
+                },
+                "measurementTime": {
+                    "type": "string",
+                    "example": "2026-07-27T07:12:00.000Z"
+                },
+                "readings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.WearableBloodPressureReading"
+                    }
+                },
+                "systolic": {
+                    "type": "number",
+                    "example": 118
+                }
+            }
+        },
+        "store.WearableMetricReading": {
+            "type": "object",
+            "properties": {
+                "raw": {
+                    "type": "number",
+                    "example": 36.72
+                },
+                "ts": {
+                    "type": "string",
+                    "example": "2026-07-27T23:44:10.512Z"
+                },
+                "value": {
+                    "type": "number",
+                    "example": 77
+                }
+            }
+        },
+        "store.WearableMetricSection": {
+            "type": "object",
+            "properties": {
+                "average": {
+                    "type": "number",
+                    "example": 74
+                },
+                "current": {
+                    "type": "number",
+                    "example": 77
+                },
+                "lastUpdated": {
+                    "type": "string",
+                    "example": "2026-07-27T23:44:10.512Z"
+                },
+                "max": {
+                    "type": "number",
+                    "example": 112
+                },
+                "min": {
+                    "type": "number",
+                    "example": 58
+                },
+                "raw": {
+                    "type": "number",
+                    "example": 36.72
+                },
+                "readings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.WearableMetricReading"
+                    }
+                },
+                "readingsCount": {
+                    "type": "number",
+                    "example": 96
+                }
+            }
+        },
+        "store.WearableRangeItem": {
+            "type": "object",
+            "properties": {
+                "activity": {
+                    "$ref": "#/definitions/store.WearableActivitySection"
+                },
+                "bloodPressure": {
+                    "$ref": "#/definitions/store.WearableBloodPressureSection"
+                },
+                "date": {
+                    "type": "string",
+                    "example": "2026-07-27"
+                },
+                "deviceUid": {
+                    "type": "string",
+                    "example": "qring-aa-bb-cc-01"
+                },
+                "heartRate": {
+                    "$ref": "#/definitions/store.WearableMetricSection"
+                },
+                "hrv": {
+                    "$ref": "#/definitions/store.WearableMetricSection"
+                },
+                "sleep": {
+                    "$ref": "#/definitions/store.WearableSleepSection"
+                },
+                "spo2": {
+                    "$ref": "#/definitions/store.WearableMetricSection"
+                },
+                "stress": {
+                    "$ref": "#/definitions/store.WearableMetricSection"
+                },
+                "temperature": {
+                    "$ref": "#/definitions/store.WearableMetricSection"
+                },
+                "totalActivities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.WearableTotalActivitySection"
+                    }
+                },
+                "tzOffsetMin": {
+                    "type": "integer",
+                    "example": 420
+                }
+            }
+        },
+        "store.WearableRangeResponse": {
+            "type": "object",
+            "properties": {
+                "deviceUid": {
+                    "type": "string",
+                    "example": "qring-aa-bb-cc-01"
+                },
+                "from": {
+                    "type": "string",
+                    "example": "2026-07-01"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.WearableRangeItem"
+                    }
+                },
+                "to": {
+                    "type": "string",
+                    "example": "2026-07-27"
+                }
+            }
+        },
+        "store.WearableSleepSection": {
+            "type": "object",
+            "properties": {
+                "awakeMinutes": {
+                    "type": "number",
+                    "example": 10
+                },
+                "deepMinutes": {
+                    "type": "number",
+                    "example": 92
+                },
+                "lastUpdated": {
+                    "type": "string",
+                    "example": "2026-07-27T23:44:10.512Z"
+                },
+                "lightMinutes": {
+                    "type": "number",
+                    "example": 268
+                },
+                "remMinutes": {
+                    "type": "number",
+                    "example": 61
+                },
+                "score": {
+                    "type": "number",
+                    "example": 78
+                },
+                "segments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.WearableSleepSegment"
+                    }
+                },
+                "sleepEnd": {
+                    "type": "string",
+                    "example": "2026-07-27T05:52:00.000Z"
+                },
+                "sleepStart": {
+                    "type": "string",
+                    "example": "2026-07-26T22:41:00.000Z"
+                },
+                "stageData": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "totalMinutes": {
+                    "type": "number",
+                    "example": 431
+                }
+            }
+        },
+        "store.WearableSleepSegment": {
+            "type": "object",
+            "properties": {
+                "end": {
+                    "type": "string",
+                    "example": "2026-07-26T23:11:00.000Z"
+                },
+                "stage": {
+                    "type": "string",
+                    "example": "light"
+                },
+                "start": {
+                    "type": "string",
+                    "example": "2026-07-26T22:41:00.000Z"
+                }
+            }
+        },
+        "store.WearableSyncRequest": {
+            "type": "object",
+            "properties": {
+                "activity": {
+                    "$ref": "#/definitions/store.WearableActivitySection"
+                },
+                "bloodPressure": {
+                    "$ref": "#/definitions/store.WearableBloodPressureSection"
+                },
+                "deviceUid": {
+                    "type": "string"
+                },
+                "device_uid": {
+                    "type": "string"
+                },
+                "heartRate": {
+                    "$ref": "#/definitions/store.WearableMetricSection"
+                },
+                "hrv": {
+                    "$ref": "#/definitions/store.WearableMetricSection"
+                },
+                "sleep": {
+                    "$ref": "#/definitions/store.WearableSleepSection"
+                },
+                "spo2": {
+                    "$ref": "#/definitions/store.WearableMetricSection"
+                },
+                "stress": {
+                    "$ref": "#/definitions/store.WearableMetricSection"
+                },
+                "temperature": {
+                    "$ref": "#/definitions/store.WearableMetricSection"
+                },
+                "totalActivities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.WearableTotalActivitySection"
+                    }
+                },
+                "tzOffsetMin": {
+                    "type": "integer"
+                }
+            }
+        },
+        "store.WearableSyncResponse": {
+            "type": "object",
+            "properties": {
+                "device_id": {
+                    "type": "string",
+                    "example": "66a000000000000000000001"
+                },
+                "device_uid": {
+                    "type": "string",
+                    "example": "qring-aa-bb-cc-01"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "synced"
+                },
+                "sync_date": {
+                    "type": "string",
+                    "example": "2026-07-27"
+                },
+                "upserted": {
+                    "$ref": "#/definitions/store.WearableSyncUpsertCounters"
+                }
+            }
+        },
+        "store.WearableSyncUpsertCounters": {
+            "type": "object",
+            "properties": {
+                "daily_activity": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "health_metrics": {
+                    "type": "integer",
+                    "example": 6
+                },
+                "sleep_segments": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "sleep_summary": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "snapshot": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "steps_15m": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "total_activities": {
+                    "type": "integer",
+                    "example": 3
+                }
+            }
+        },
+        "store.WearableTotalActivitySection": {
+            "type": "object",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "example": "steps"
+                },
+                "target": {
+                    "type": "number",
+                    "example": 4000
+                },
+                "value": {
+                    "type": "number",
+                    "example": 717
+                }
+            }
+        },
+        "store.WorkoutLocation": {
+            "type": "object",
+            "properties": {
+                "rate_real": {
+                    "type": "integer"
+                }
+            }
+        },
+        "store.WorkoutResponse": {
+            "type": "object",
+            "properties": {
+                "avg_cadence_spm": {
+                    "type": "integer"
+                },
+                "avg_hr": {
+                    "type": "integer"
+                },
+                "avg_speed_cm_s": {
+                    "type": "integer"
+                },
+                "calories": {
+                    "type": "number"
+                },
+                "device_id": {
+                    "type": "string"
+                },
+                "distance_m": {
+                    "type": "integer"
+                },
+                "downhill_cm": {
+                    "type": "integer"
+                },
+                "duration_s": {
+                    "type": "integer"
+                },
+                "elevation_cm": {
+                    "type": "integer"
+                },
+                "end_utc": {
+                    "type": "string"
+                },
+                "locations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.WorkoutLocation"
+                    }
+                },
+                "max_hr": {
+                    "type": "integer"
+                },
+                "max_speed_cm_s": {
+                    "type": "integer"
+                },
+                "min_hr": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "sport_count": {
+                    "type": "integer"
+                },
+                "sport_type_id": {
+                    "type": "integer"
+                },
+                "start_utc": {
+                    "type": "string"
+                },
+                "steps": {
+                    "type": "integer"
+                },
+                "synced_at": {
+                    "type": "string"
+                },
+                "tz_offset_min": {
+                    "type": "integer"
+                },
+                "uphill_cm": {
+                    "type": "integer"
+                }
+            }
+        }
+    }
+}
