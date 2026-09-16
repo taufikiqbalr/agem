@@ -20,7 +20,11 @@ func (s *Store) SyncWearable(ctx context.Context, req WearableSyncRequest) (*Wea
 	if deviceUID == "" {
 		return nil, wearablePayloadError("deviceUid is required")
 	}
-	if req.TzOffsetMin < -14*60 || req.TzOffsetMin > 14*60 {
+	if req.TzOffsetMin == nil {
+		return nil, wearablePayloadError("tzOffsetMin is required")
+	}
+	tzOffsetMin := *req.TzOffsetMin
+	if tzOffsetMin < -14*60 || tzOffsetMin > 14*60 {
 		return nil, wearablePayloadError("tzOffsetMin must be between -840 and 840")
 	}
 	if len(req.Days) == 0 && req.DeviceState == nil && isEmptyWearableDeviceMetadata(req.Device) {
@@ -37,7 +41,7 @@ func (s *Store) SyncWearable(ctx context.Context, req WearableSyncRequest) (*Wea
 
 	seenDates := make(map[string]struct{}, len(req.Days))
 	for _, day := range req.Days {
-		if _, err := parseDeviceDayStart(day.Date, req.TzOffsetMin); err != nil {
+		if _, err := parseDeviceDayStart(day.Date, tzOffsetMin); err != nil {
 			return nil, err
 		}
 		if _, exists := seenDates[day.Date]; exists {
@@ -65,8 +69,8 @@ func (s *Store) SyncWearable(ctx context.Context, req WearableSyncRequest) (*Wea
 		if req.DeviceState.BatteryPercent != nil {
 			battery := *req.DeviceState.BatteryPercent
 			value := float64(battery)
-			dayDate := deviceDateForUTC(stateTime, req.TzOffsetMin)
-			inserted, err := s.ingestV3Measurement(ctx, device.ID.Hex(), dayDate, req.TzOffsetMin, WearableMeasurement{
+			dayDate := deviceDateForUTC(stateTime, tzOffsetMin)
+			inserted, err := s.ingestV3Measurement(ctx, device.ID.Hex(), dayDate, tzOffsetMin, WearableMeasurement{
 				Ts:              stateTime.Format(time.RFC3339Nano),
 				Metric:          "battery_level",
 				Value:           &value,
@@ -80,8 +84,8 @@ func (s *Store) SyncWearable(ctx context.Context, req WearableSyncRequest) (*Wea
 			response.Upserted.Measurements += inserted
 		}
 		if req.DeviceState.Charging != nil {
-			dayDate := deviceDateForUTC(stateTime, req.TzOffsetMin)
-			inserted, err := s.ingestV3Event(ctx, device.ID.Hex(), dayDate, req.TzOffsetMin, WearableDeviceEvent{
+			dayDate := deviceDateForUTC(stateTime, tzOffsetMin)
+			inserted, err := s.ingestV3Event(ctx, device.ID.Hex(), dayDate, tzOffsetMin, WearableDeviceEvent{
 				Ts:        stateTime.Format(time.RFC3339Nano),
 				EventType: "charging_state",
 				Source:    "device_state",
@@ -98,14 +102,14 @@ func (s *Store) SyncWearable(ctx context.Context, req WearableSyncRequest) (*Wea
 		result := WearableDaySyncResult{Date: day.Date}
 
 		if day.Activity != nil {
-			if err := s.upsertV3DailyActivity(ctx, device.ID.Hex(), day.Date, req.TzOffsetMin, *day.Activity); err != nil {
+			if err := s.upsertV3DailyActivity(ctx, device.ID.Hex(), day.Date, tzOffsetMin, *day.Activity); err != nil {
 				return nil, err
 			}
 			result.Upserted.DailyActivity = 1
 		}
 
 		for i, bucket := range day.ActivityBuckets {
-			inserted, err := s.ingestV3ActivityBucket(ctx, device.ID.Hex(), day.Date, req.TzOffsetMin, bucket)
+			inserted, err := s.ingestV3ActivityBucket(ctx, device.ID.Hex(), day.Date, tzOffsetMin, bucket)
 			if err != nil {
 				return nil, fmt.Errorf("day %s activityBuckets[%d]: %w", day.Date, i, err)
 			}
@@ -113,11 +117,11 @@ func (s *Store) SyncWearable(ctx context.Context, req WearableSyncRequest) (*Wea
 		}
 
 		for i, measurement := range day.Measurements {
-			ts, err := resolveDayTimestamp(day.Date, req.TzOffsetMin, measurement.Ts, measurement.MinuteOfDay)
+			ts, err := resolveDayTimestamp(day.Date, tzOffsetMin, measurement.Ts, measurement.MinuteOfDay)
 			if err != nil {
 				return nil, fmt.Errorf("day %s measurements[%d]: %w", day.Date, i, err)
 			}
-			inserted, err := s.ingestV3Measurement(ctx, device.ID.Hex(), day.Date, req.TzOffsetMin, measurement, ts)
+			inserted, err := s.ingestV3Measurement(ctx, device.ID.Hex(), day.Date, tzOffsetMin, measurement, ts)
 			if err != nil {
 				return nil, fmt.Errorf("day %s measurements[%d]: %w", day.Date, i, err)
 			}
@@ -125,7 +129,7 @@ func (s *Store) SyncWearable(ctx context.Context, req WearableSyncRequest) (*Wea
 		}
 
 		for i, session := range day.SleepSessions {
-			sessionCount, segmentCount, err := s.upsertV3SleepSession(ctx, device.ID.Hex(), day.Date, req.TzOffsetMin, session)
+			sessionCount, segmentCount, err := s.upsertV3SleepSession(ctx, device.ID.Hex(), day.Date, tzOffsetMin, session)
 			if err != nil {
 				return nil, fmt.Errorf("day %s sleepSessions[%d]: %w", day.Date, i, err)
 			}
@@ -133,7 +137,7 @@ func (s *Store) SyncWearable(ctx context.Context, req WearableSyncRequest) (*Wea
 			result.Upserted.SleepSegments += segmentCount
 		}
 		if len(day.SleepSessions) > 0 {
-			if err := s.refreshV3SleepSummary(ctx, device.ID.Hex(), day.Date, req.TzOffsetMin); err != nil {
+			if err := s.refreshV3SleepSummary(ctx, device.ID.Hex(), day.Date, tzOffsetMin); err != nil {
 				return nil, err
 			}
 			result.Upserted.SleepSummaries = 1
@@ -147,18 +151,18 @@ func (s *Store) SyncWearable(ctx context.Context, req WearableSyncRequest) (*Wea
 		}
 
 		for i, workout := range day.Workouts {
-			if err := s.upsertV3Workout(ctx, device.ID.Hex(), day.Date, req.TzOffsetMin, workout); err != nil {
+			if err := s.upsertV3Workout(ctx, device.ID.Hex(), day.Date, tzOffsetMin, workout); err != nil {
 				return nil, fmt.Errorf("day %s workouts[%d]: %w", day.Date, i, err)
 			}
-			result.Upserted.Workouts++
+t		result.Upserted.Workouts++
 		}
 
 		for i, event := range day.Events {
-			ts, err := resolveDayTimestamp(day.Date, req.TzOffsetMin, event.Ts, event.MinuteOfDay)
+			ts, err := resolveDayTimestamp(day.Date, tzOffsetMin, event.Ts, event.MinuteOfDay)
 			if err != nil {
 				return nil, fmt.Errorf("day %s events[%d]: %w", day.Date, i, err)
 			}
-			inserted, err := s.ingestV3Event(ctx, device.ID.Hex(), day.Date, req.TzOffsetMin, event, ts)
+			inserted, err := s.ingestV3Event(ctx, device.ID.Hex(), day.Date, tzOffsetMin, event, ts)
 			if err != nil {
 				return nil, fmt.Errorf("day %s events[%d]: %w", day.Date, i, err)
 			}
@@ -166,14 +170,14 @@ func (s *Store) SyncWearable(ctx context.Context, req WearableSyncRequest) (*Wea
 		}
 
 		for i, sample := range day.RawSamples {
-			inserted, err := s.ingestV3RawSample(ctx, device.ID.Hex(), day.Date, req.TzOffsetMin, sample)
+			inserted, err := s.ingestV3RawSample(ctx, device.ID.Hex(), day.Date, tzOffsetMin, sample)
 			if err != nil {
 				return nil, fmt.Errorf("day %s rawSamples[%d]: %w", day.Date, i, err)
 			}
 			result.Upserted.RawSamples += inserted
 		}
 
-		if err := s.upsertV3SyncMetadata(ctx, device.ID.Hex(), deviceUID, syncID, day.Date, req.TzOffsetMin, result.Upserted); err != nil {
+		if err := s.upsertV3SyncMetadata(ctx, device.ID.Hex(), deviceUID, syncID, day.Date, tzOffsetMin, result.Upserted); err != nil {
 			return nil, err
 		}
 		result.Upserted.SyncMetadata = 1
