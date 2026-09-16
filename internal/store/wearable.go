@@ -23,7 +23,7 @@ var (
 type WearableSyncRequest struct {
 	DeviceUID      string                 `json:"deviceUid,omitempty"`
 	DeviceUIDAlias string                 `json:"device_uid,omitempty"`
-	TzOffsetMin    int                    `json:"tzOffsetMin"`
+	TzOffsetMin    *int                   `json:"tzOffsetMin"`
 	Device         WearableDeviceMetadata `json:"device,omitempty"`
 	DeviceState    *WearableDeviceState   `json:"deviceState,omitempty"`
 	Days           []WearableDay          `json:"days,omitempty"`
