@@ -26,6 +26,14 @@ func (s *Store) SyncWearable(ctx context.Context, req WearableSyncRequest) (*Wea
 	if len(req.Days) == 0 && req.DeviceState == nil && isEmptyWearableDeviceMetadata(req.Device) {
 		return nil, wearablePayloadError("at least one of device metadata, deviceState, or days is required")
 	}
+	// Validate state before any device upsert so a rejected request cannot write
+	// an invalid current state and then return HTTP 400.
+	if req.DeviceState != nil && req.DeviceState.BatteryPercent != nil {
+		battery := *req.DeviceState.BatteryPercent
+		if battery < 0 || battery > 100 {
+			return nil, wearablePayloadError("deviceState.batteryPercent must be 0..100")
+		}
+	}
 
 	seenDates := make(map[string]struct{}, len(req.Days))
 	for _, day := range req.Days {
@@ -56,9 +64,6 @@ func (s *Store) SyncWearable(ctx context.Context, req WearableSyncRequest) (*Wea
 		response.Upserted.DeviceState = 1
 		if req.DeviceState.BatteryPercent != nil {
 			battery := *req.DeviceState.BatteryPercent
-			if battery < 0 || battery > 100 {
-				return nil, wearablePayloadError("deviceState.batteryPercent must be 0..100")
-			}
 			value := float64(battery)
 			dayDate := deviceDateForUTC(stateTime, req.TzOffsetMin)
 			inserted, err := s.ingestV3Measurement(ctx, device.ID.Hex(), dayDate, req.TzOffsetMin, WearableMeasurement{
@@ -168,7 +173,7 @@ func (s *Store) SyncWearable(ctx context.Context, req WearableSyncRequest) (*Wea
 			result.Upserted.RawSamples += inserted
 		}
 
-		if err := s.upsertV3SyncMetadata(ctx, device.ID.Hex(), deviceUID, syncID, day.Date, result.Upserted); err != nil {
+		if err := s.upsertV3SyncMetadata(ctx, device.ID.Hex(), deviceUID, syncID, day.Date, req.TzOffsetMin, result.Upserted); err != nil {
 			return nil, err
 		}
 		result.Upserted.SyncMetadata = 1

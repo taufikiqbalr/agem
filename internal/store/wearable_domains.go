@@ -54,6 +54,9 @@ func (s *Store) upsertV3Workout(ctx context.Context, deviceID, deviceDate string
 		return wearablePayloadError("invalid workout.startUtc")
 	}
 	start = start.UTC()
+	if deviceDateForUTC(start, tzOffsetMin) != strings.TrimSpace(deviceDate) {
+		return wearablePayloadError("workout.startUtc does not belong to day date in device timezone")
+	}
 	var end *time.Time
 	if strings.TrimSpace(workout.EndUTC) != "" {
 		parsed, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(workout.EndUTC))
@@ -194,6 +197,9 @@ func (s *Store) ingestV3RawSample(ctx context.Context, deviceID, deviceDate stri
 		return 0, wearablePayloadError("invalid raw sample ts")
 	}
 	ts = ts.UTC()
+	if deviceDateForUTC(ts, tzOffsetMin) != strings.TrimSpace(deviceDate) {
+		return 0, wearablePayloadError("raw sample ts does not belong to day date in device timezone")
+	}
 	kind := sanitizeName(firstNonEmpty(sample.Kind, "sensor"))
 	sessionID := strings.TrimSpace(sample.SessionID)
 	now := time.Now().UTC()
@@ -223,7 +229,7 @@ func (s *Store) ingestV3RawSample(ctx context.Context, deviceID, deviceDate stri
 	return 1, nil
 }
 
-func (s *Store) upsertV3SyncMetadata(ctx context.Context, deviceID, deviceUID, syncID, date string, counters WearableSyncUpsertCounters) error {
+func (s *Store) upsertV3SyncMetadata(ctx context.Context, deviceID, deviceUID, syncID, date string, tzOffsetMin int, counters WearableSyncUpsertCounters) error {
 	now := time.Now().UTC()
 	coverage := bson.M{
 		"daily_activity":   counters.DailyActivity > 0,
@@ -243,7 +249,7 @@ func (s *Store) upsertV3SyncMetadata(ctx context.Context, deviceID, deviceUID, s
 		bson.M{"device_uid": deviceUID, "sync_date": date},
 		bson.M{
 			"$set": bson.M{
-				"device_id": deviceID, "device_uid": deviceUID, "sync_date": date,
+				"device_id": deviceID, "device_uid": deviceUID, "sync_date": date, "tz_offset_min": tzOffsetMin,
 				"last_sync_id": syncID, "coverage": coverage, "source": wearableV3Source,
 				"received_at": now, "updated_at": now,
 			},

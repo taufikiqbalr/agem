@@ -30,6 +30,7 @@ type wearableV3PairingDoc struct {
 	DeviceID   string             `bson:"device_id"`
 	Nickname   *string            `bson:"nickname,omitempty"`
 	IsPrimary  bool               `bson:"is_primary"`
+	Active     bool               `bson:"active"`
 	PairedAt   time.Time          `bson:"paired_at"`
 	UnpairedAt *time.Time         `bson:"unpaired_at,omitempty"`
 }

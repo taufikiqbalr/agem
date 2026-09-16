@@ -1,6 +1,8 @@
 package store
 
 import (
+	"context"
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -120,5 +122,25 @@ func TestNormalizeBSONDocumentPreservesMetricValueKeys(t *testing.T) {
 	want := map[string]any{"heart_rate": 72, "side_temperature": 35.1}
 	if !reflect.DeepEqual(values, want) {
 		t.Fatalf("values = %#v, want %#v", values, want)
+	}
+}
+
+func TestResolveDayTimestampRejectsWrongDeviceDate(t *testing.T) {
+	_, err := resolveDayTimestamp("2026-09-17", 420, "2026-09-16T16:59:59Z", nil)
+	if err == nil {
+		t.Fatal("expected timestamp/date mismatch error")
+	}
+}
+
+func TestSyncWearableRejectsInvalidBatteryBeforeDatabaseWrite(t *testing.T) {
+	battery := 101
+	var st Store
+	_, err := st.SyncWearable(context.Background(), WearableSyncRequest{
+		DeviceUID:   "qring-test",
+		TzOffsetMin: 420,
+		DeviceState: &WearableDeviceState{BatteryPercent: &battery},
+	})
+	if !errors.Is(err, ErrInvalidWearablePayload) {
+		t.Fatalf("SyncWearable() error = %v, want ErrInvalidWearablePayload", err)
 	}
 }

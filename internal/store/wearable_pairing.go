@@ -39,7 +39,9 @@ func (s *Store) GetWearableDeviceByIDV3(ctx context.Context, id string) (*Wearab
 }
 
 func (s *Store) PairWearableDeviceV3(ctx context.Context, p PairWearableDeviceParams) (*WearablePairingView, error) {
-	if strings.TrimSpace(p.UserID) == "" || strings.TrimSpace(p.DeviceUID) == "" {
+	p.UserID = strings.TrimSpace(p.UserID)
+	p.DeviceUID = strings.TrimSpace(p.DeviceUID)
+	if p.UserID == "" || p.DeviceUID == "" {
 		return nil, wearablePayloadError("userId and deviceUid are required")
 	}
 	exists, err := s.UserExists(ctx, p.UserID)
@@ -58,22 +60,35 @@ func (s *Store) PairWearableDeviceV3(ctx context.Context, p PairWearableDevicePa
 	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	col := s.db.Collection("user_devices")
+
+	// Fail before changing the caller's current primary device if this wearable
+	// already has another active owner. The partial unique index remains the
+	// final race-condition guard.
+	var activeOwner wearableV3PairingDoc
+	ownerErr := col.FindOne(cctx, bson.M{"device_id": deviceID, "active": true}).Decode(&activeOwner)
+	if ownerErr == nil && activeOwner.UserID != p.UserID {
+		return nil, ErrDeviceAlreadyPaired
+	}
+	if ownerErr != nil && !errors.Is(ownerErr, mongo.ErrNoDocuments) {
+		return nil, ownerErr
+	}
+
 	if p.IsPrimary {
-		if _, err := col.UpdateMany(cctx, bson.M{"user_id": p.UserID, "unpaired_at": bson.M{"$exists": false}}, bson.M{"$set": bson.M{"is_primary": false}}); err != nil {
+		if _, err := col.UpdateMany(cctx, bson.M{"user_id": p.UserID, "active": true}, bson.M{"$set": bson.M{"is_primary": false}}); err != nil {
 			return nil, err
 		}
 	}
-	set := bson.M{"is_primary": p.IsPrimary}
+	set := bson.M{"is_primary": p.IsPrimary, "active": true}
 	if nickname := strings.TrimSpace(p.Nickname); nickname != "" {
 		set["nickname"] = nickname
 	}
 	var pair wearableV3PairingDoc
 	err = col.FindOneAndUpdate(
 		cctx,
-		bson.M{"user_id": p.UserID, "device_id": deviceID, "unpaired_at": bson.M{"$exists": false}},
+		bson.M{"user_id": p.UserID, "device_id": deviceID, "active": true},
 		bson.M{
 			"$set":         set,
-			"$setOnInsert": bson.M{"_id": primitive.NewObjectID(), "user_id": p.UserID, "device_id": deviceID, "paired_at": now},
+			"$setOnInsert": bson.M{"_id": primitive.NewObjectID(), "user_id": p.UserID, "device_id": deviceID, "active": true, "paired_at": now},
 		},
 		options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After),
 	).Decode(&pair)
@@ -88,6 +103,7 @@ func (s *Store) PairWearableDeviceV3(ctx context.Context, p PairWearableDevicePa
 }
 
 func (s *Store) ListWearableDevicesForUserV3(ctx context.Context, userID string) ([]WearablePairingView, error) {
+	userID = strings.TrimSpace(userID)
 	exists, err := s.UserExists(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -99,7 +115,7 @@ func (s *Store) ListWearableDevicesForUserV3(ctx context.Context, userID string)
 	defer cancel()
 	cursor, err := s.db.Collection("user_devices").Find(
 		cctx,
-		bson.M{"user_id": userID, "unpaired_at": bson.M{"$exists": false}},
+		bson.M{"user_id": userID, "active": true},
 		options.Find().SetSort(bson.D{{Key: "is_primary", Value: -1}, {Key: "paired_at", Value: -1}}),
 	)
 	if err != nil {
@@ -125,6 +141,8 @@ func (s *Store) ListWearableDevicesForUserV3(ctx context.Context, userID string)
 }
 
 func (s *Store) UpdateWearablePairingV3(ctx context.Context, userID, deviceUID string, p UpdateWearablePairingParams) (*WearablePairingView, error) {
+	userID = strings.TrimSpace(userID)
+	deviceUID = strings.TrimSpace(deviceUID)
 	device, err := s.getWearableDeviceDocByUID(ctx, deviceUID)
 	if err != nil {
 		return nil, err
@@ -133,8 +151,23 @@ func (s *Store) UpdateWearablePairingV3(ctx context.Context, userID, deviceUID s
 	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	col := s.db.Collection("user_devices")
+
+	// Resolve the target first so a request for a nonexistent pairing cannot
+	// accidentally demote the user's current primary wearable.
+	var existing wearableV3PairingDoc
+	if err := col.FindOne(cctx, bson.M{"user_id": userID, "device_id": deviceID, "active": true}).Decode(&existing); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, ErrPairingNotFound
+		}
+		return nil, err
+	}
+
 	if p.IsPrimary != nil && *p.IsPrimary {
-		if _, err := col.UpdateMany(cctx, bson.M{"user_id": userID, "unpaired_at": bson.M{"$exists": false}}, bson.M{"$set": bson.M{"is_primary": false}}); err != nil {
+		if _, err := col.UpdateMany(
+			cctx,
+			bson.M{"user_id": userID, "active": true, "_id": bson.M{"$ne": existing.ID}},
+			bson.M{"$set": bson.M{"is_primary": false}},
+		); err != nil {
 			return nil, err
 		}
 	}
@@ -146,12 +179,13 @@ func (s *Store) UpdateWearablePairingV3(ctx context.Context, userID, deviceUID s
 		set["is_primary"] = *p.IsPrimary
 	}
 	if len(set) == 0 {
-		return s.getWearablePairingView(ctx, userID, deviceID, *device)
+		view := wearableV3PairingDocToView(existing, *device)
+		return &view, nil
 	}
 	var pair wearableV3PairingDoc
 	err = col.FindOneAndUpdate(
 		cctx,
-		bson.M{"user_id": userID, "device_id": deviceID, "unpaired_at": bson.M{"$exists": false}},
+		bson.M{"_id": existing.ID, "active": true},
 		bson.M{"$set": set},
 		options.FindOneAndUpdate().SetReturnDocument(options.After),
 	).Decode(&pair)
@@ -178,8 +212,8 @@ func (s *Store) UnpairWearableDeviceV3(ctx context.Context, userID, deviceUID st
 	now := time.Now().UTC()
 	res, err := s.db.Collection("user_devices").UpdateOne(
 		cctx,
-		bson.M{"user_id": userID, "device_id": device.ID.Hex(), "unpaired_at": bson.M{"$exists": false}},
-		bson.M{"$set": bson.M{"unpaired_at": now, "is_primary": false}},
+		bson.M{"user_id": strings.TrimSpace(userID), "device_id": device.ID.Hex(), "active": true},
+		bson.M{"$set": bson.M{"active": false, "unpaired_at": now, "is_primary": false}},
 	)
 	if err != nil {
 		return err

@@ -28,8 +28,19 @@ func (s *Store) EnsureSDKV3Schema(ctx context.Context) error {
 		return err
 	}
 
-	activePairFilter := bson.M{"unpaired_at": bson.M{"$exists": false}}
-	primaryPairFilter := bson.M{"unpaired_at": bson.M{"$exists": false}, "is_primary": true}
+	// MongoDB partial indexes support equality and $exists:true, but not
+	// $exists:false. Backfill an explicit active flag before creating the
+	// ownership indexes so both legacy and v3 pairing rows are constrained.
+	pairings := s.db.Collection("user_devices")
+	if _, err := pairings.UpdateMany(cctx, bson.M{"active": bson.M{"$exists": false}, "unpaired_at": bson.M{"$exists": false}}, bson.M{"$set": bson.M{"active": true}}); err != nil {
+		return fmt.Errorf("backfill active pairings: %w", err)
+	}
+	if _, err := pairings.UpdateMany(cctx, bson.M{"active": bson.M{"$exists": false}, "unpaired_at": bson.M{"$exists": true}}, bson.M{"$set": bson.M{"active": false, "is_primary": false}}); err != nil {
+		return fmt.Errorf("backfill inactive pairings: %w", err)
+	}
+
+	activePairFilter := bson.M{"active": true}
+	primaryPairFilter := bson.M{"active": true, "is_primary": true}
 
 	indexes := map[string][]mongo.IndexModel{
 		"devices": {

@@ -44,7 +44,7 @@ func (s *Store) getWearablePairingView(ctx context.Context, userID, deviceID str
 	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	var pair wearableV3PairingDoc
-	if err := s.db.Collection("user_devices").FindOne(cctx, bson.M{"user_id": userID, "device_id": deviceID, "unpaired_at": bson.M{"$exists": false}}).Decode(&pair); err != nil {
+	if err := s.db.Collection("user_devices").FindOne(cctx, bson.M{"user_id": userID, "device_id": deviceID, "active": true}).Decode(&pair); err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, ErrPairingNotFound
 		}
@@ -70,7 +70,11 @@ func resolveDayTimestamp(date string, tzOffsetMin int, explicit string, minuteOf
 		if err != nil {
 			return time.Time{}, wearablePayloadError("invalid timestamp")
 		}
-		return parsed.UTC(), nil
+		parsed = parsed.UTC()
+		if deviceDateForUTC(parsed, tzOffsetMin) != strings.TrimSpace(date) {
+			return time.Time{}, wearablePayloadError("timestamp does not belong to day date in device timezone")
+		}
+		return parsed, nil
 	}
 	if minuteOfDay == nil || *minuteOfDay < 0 || *minuteOfDay > 1439 {
 		return time.Time{}, wearablePayloadError("ts or minuteOfDay (0..1439) is required")
