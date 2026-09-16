@@ -47,6 +47,16 @@ jobs:
       - name: Build API
         run: go build ./cmd/api
 
+      - name: Validate Swagger generation
+        shell: bash
+        run: |
+          go install github.com/swaggo/swag/cmd/swag@latest
+          swag init -g ./cmd/api/main.go
+          grep -q '/v3/wearable/sync' docs/swagger.yaml
+          grep -q 'activityBuckets' docs/swagger.yaml
+          grep -q 'sleepSessions' docs/swagger.yaml
+          grep -q 'measurementMode' docs/swagger.yaml
+
       - name: Start MongoDB 7
         shell: bash
         run: |
