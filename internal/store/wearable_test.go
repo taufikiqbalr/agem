@@ -132,12 +132,24 @@ func TestResolveDayTimestampRejectsWrongDeviceDate(t *testing.T) {
 	}
 }
 
+func TestSyncWearableRequiresTimezoneOffset(t *testing.T) {
+	var st Store
+	_, err := st.SyncWearable(context.Background(), WearableSyncRequest{
+		DeviceUID: "qring-test",
+		Device:    WearableDeviceMetadata{Vendor: "QRing"},
+	})
+	if !errors.Is(err, ErrInvalidWearablePayload) {
+		t.Fatalf("SyncWearable() error = %v, want ErrInvalidWearablePayload", err)
+	}
+}
+
 func TestSyncWearableRejectsInvalidBatteryBeforeDatabaseWrite(t *testing.T) {
 	battery := 101
+	tzOffsetMin := 420
 	var st Store
 	_, err := st.SyncWearable(context.Background(), WearableSyncRequest{
 		DeviceUID:   "qring-test",
-		TzOffsetMin: 420,
+		TzOffsetMin: &tzOffsetMin,
 		DeviceState: &WearableDeviceState{BatteryPercent: &battery},
 	})
 	if !errors.Is(err, ErrInvalidWearablePayload) {
