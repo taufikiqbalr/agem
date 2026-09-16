@@ -25,7 +25,8 @@ func (s *Store) upsertWearableDevice(ctx context.Context, deviceUID string, meta
 	}
 
 	set := bson.M{"updated_at": now, "last_seen_at": lastSeen}
-	if vendor := strings.TrimSpace(meta.Vendor); vendor != "" {
+	vendor := strings.TrimSpace(meta.Vendor)
+	if vendor != "" {
 		set["vendor"] = vendor
 	}
 	if model := strings.TrimSpace(meta.Model); model != "" {
@@ -56,12 +57,17 @@ func (s *Store) upsertWearableDevice(ctx context.Context, deviceUID string, meta
 		set["state_updated_at"] = lastSeen
 	}
 
+	// A field may not appear in both $set and $setOnInsert in the same MongoDB
+	// update. Put the default vendor in $setOnInsert only when the caller did not
+	// explicitly supply a vendor in $set.
 	setOnInsert := bson.M{
 		"_id":           primitive.NewObjectID(),
 		"device_uid":    deviceUID,
-		"vendor":        firstNonEmpty(strings.TrimSpace(meta.Vendor), "QRing"),
 		"first_seen_at": lastSeen,
 		"created_at":    now,
+	}
+	if vendor == "" {
+		setOnInsert["vendor"] = "QRing"
 	}
 
 	var doc wearableV3DeviceDoc
