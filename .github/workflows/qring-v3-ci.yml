@@ -1,0 +1,48 @@
+name: QRing v3 CI
+
+on:
+  pull_request:
+    branches:
+      - test
+  push:
+    branches:
+      - qring-v3-sdk-overhaul
+
+permissions:
+  contents: read
+
+jobs:
+  go-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify gofmt
+        shell: bash
+        run: |
+          files="$(find . -name '*.go' -type f -print0 | xargs -0 gofmt -l)"
+          if [ -n "$files" ]; then
+            echo "The following files are not gofmt formatted:"
+            echo "$files"
+            exit 1
+          fi
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Run vet
+        run: go vet ./...
+
+      - name: Build API
+        run: go build ./cmd/api
