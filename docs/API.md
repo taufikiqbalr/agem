@@ -2,6 +2,8 @@
 
 This document is the route-focused companion to the repository README. The canonical QRing frontend contract is v3.
 
+> **Documentation policy:** `README.md` and this `docs/API.md` file are the committed source of truth for the v3 contract. Swagger 2 artifacts are generated from Go annotations during CI/Docker build with `swag init -g ./cmd/api/main.go` and are intentionally not committed, preventing stale generated specifications from drifting behind the implementation.
+
 ## Base URL
 
 ```text
@@ -115,7 +117,7 @@ http://localhost:8080
 ## Time semantics
 
 - `days[].date` is always device-local `YYYY-MM-DD`.
-- `tzOffsetMin` is the UTC offset used to interpret local dates and `minuteOfDay` / `timeIndex`.
+- `tzOffsetMin` is required and is the UTC offset used to interpret local dates and `minuteOfDay` / `timeIndex`.
 - Measurement/event time can be supplied as RFC3339 `ts` or `minuteOfDay`.
 - `activityBuckets[].timeIndex` is `0..95`, each bucket representing 15 minutes.
 - All actual timestamps are stored in UTC.
