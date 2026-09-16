@@ -88,7 +88,7 @@ func (s *Store) PairWearableDeviceV3(ctx context.Context, p PairWearableDevicePa
 		bson.M{"user_id": p.UserID, "device_id": deviceID, "active": true},
 		bson.M{
 			"$set":         set,
-			"$setOnInsert": bson.M{"_id": primitive.NewObjectID(), "user_id": p.UserID, "device_id": deviceID, "active": true, "paired_at": now},
+			"$setOnInsert": bson.M{"_id": primitive.NewObjectID(), "user_id": p.UserID, "device_id": deviceID, "paired_at": now},
 		},
 		options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After),
 	).Decode(&pair)
